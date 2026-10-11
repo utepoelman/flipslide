@@ -394,7 +394,7 @@
             font-weight: bold;
             cursor: pointer;
             box-shadow: 0 4px 12px rgba(0,0,0,0.25);
-            display: none; /* Only shown in Online Room mode */
+            display: none;
             align-items: center;
             gap: 8px;
             transition: transform 0.2s, background 0.2s;
@@ -477,7 +477,7 @@
 </head>
 <body>
 
-    <!-- 1. MAIN MENU MODAL -->
+    <!-- MAIN MENU MODAL -->
     <div id="main-menu-modal" class="modal-overlay" style="display:flex;">
         <div class="modal-box">
             <div class="modal-title">FLIPSLIDE</div>
@@ -492,7 +492,7 @@
         </div>
     </div>
 
-    <!-- 2. LOCAL PASS & PLAY SETUP MODAL -->
+    <!-- LOCAL PASS & PLAY SETUP MODAL -->
     <div id="local-setup-modal" class="modal-overlay">
         <div class="modal-box">
             <div class="modal-title">PASS & PLAY</div>
@@ -555,12 +555,12 @@
 
             <div class="label-text">Winning Condition</div>
             <select id="local-goal-type" onchange="onGoalTypeChange('local')">
-                <option value="target" selected>Target Score</option>
-                <option value="single">Single Round</option>
+                <option value="single" selected>Single Round</option>
+                <option value="target">Target Score</option>
                 <option value="unlimited">Unlimited Play</option>
             </select>
 
-            <div id="local-target-score-wrapper" class="setup-row">
+            <div id="local-target-score-wrapper" class="setup-row" style="display:none;">
                 <div class="label-text">Target Points</div>
                 <input type="number" id="local-target-score-input" value="50" min="5" max="500" step="5">
             </div>
@@ -570,7 +570,7 @@
         </div>
     </div>
 
-    <!-- 3. HOST ONLINE ROOM SETUP MODAL -->
+    <!-- HOST ONLINE ROOM SETUP MODAL -->
     <div id="host-setup-modal" class="modal-overlay">
         <div class="modal-box">
             <div class="modal-title">HOST ROOM</div>
@@ -603,12 +603,12 @@
 
             <div class="label-text">Winning Condition</div>
             <select id="host-goal-type" onchange="onGoalTypeChange('host')">
-                <option value="target" selected>Target Score</option>
-                <option value="single">Single Round</option>
+                <option value="single" selected>Single Round</option>
+                <option value="target">Target Score</option>
                 <option value="unlimited">Unlimited Play</option>
             </select>
 
-            <div id="host-target-score-wrapper" class="setup-row">
+            <div id="host-target-score-wrapper" class="setup-row" style="display:none;">
                 <div class="label-text">Target Points</div>
                 <input type="number" id="host-target-score-input" value="50" min="5" max="500" step="5">
             </div>
@@ -632,7 +632,7 @@
         </div>
     </div>
 
-    <!-- 4. JOIN ONLINE ROOM MODAL -->
+    <!-- JOIN ONLINE ROOM MODAL -->
     <div id="join-modal" class="modal-overlay">
         <div class="modal-box">
             <div class="modal-title">JOIN ROOM</div>
@@ -736,9 +736,8 @@
         </div>
     </div>
 
-    <!-- STREAMLINED GAME LAYOUT -->
+    <!-- GAME LAYOUT -->
     <div id="game-layout">
-        <!-- Single Left Player Panel -->
         <div class="player-panel" id="main-player-panel">
             <div class="panel-title" id="main-panel-name">Hand</div>
             <div class="panel-sub" id="main-panel-progress"></div>
@@ -842,7 +841,7 @@ let gameState = {
     pieces: [[], [], []],
     selByPlayer: [0, 0, 0],
     scores: [0, 0, 0],
-    matchGoal: 50,
+    matchGoal: 'single',
     currentPlayer: 0, 
     deck: [],
     hands: [[], [], []],
@@ -1293,8 +1292,14 @@ function handleGuestNetMessage(data) {
 
         updateScoreBoard();
         hideAllModals();
-        updateUI();
+
+        runRoundStartSequence(data.firstPlayerWinner);
         addChatMessage('System', '#6c757d', 'Match started!');
+    } else if (data.type === 'START_ROUND') {
+        gameState = data.gameState;
+        updateScoreBoard();
+        if (data.msg) addChatMessage('System', '#6c757d', data.msg);
+        runRoundStartSequence(data.firstPlayerWinner);
     } else if (data.type === 'SYNC_STATE') {
         gameState = data.gameState;
         updateUI();
@@ -1358,7 +1363,7 @@ function startOnlineGame() {
     const n = selectedPlayerCount('host');
     const goalType = document.getElementById('host-goal-type').value;
 
-    let matchGoal = 50;
+    let matchGoal = 'single';
     if (goalType === 'single') matchGoal = 'single';
     else if (goalType === 'unlimited') matchGoal = 'unlimited';
     else matchGoal = parseInt(document.getElementById('host-target-score-input').value) || 50;
@@ -1390,11 +1395,14 @@ function startOnlineGame() {
     document.getElementById('top-room-code').innerText = netState.roomCode;
     document.getElementById('chat-toggle-btn').style.display = 'flex';
 
-    initRound();
+    initRoundState();
+
+    const winner = Math.floor(Math.random() * n);
 
     const startPayload = {
         type: 'START_GAME',
-        gameState: getSerializableState()
+        gameState: getSerializableState(),
+        firstPlayerWinner: winner
     };
 
     netState.conns.forEach(c => {
@@ -1402,17 +1410,32 @@ function startOnlineGame() {
             c.conn.send({ ...startPayload, myIdx: c.pIdx });
         }
     });
+
+    runRoundStartSequence(winner);
 }
 
 function startNextRound() {
     document.getElementById('end-modal').style.display = 'none';
-    initRound();
+    
+    initRoundState();
+    const winner = Math.floor(Math.random() * gameState.numPlayers);
+
     if (netState.setupMode === 'online' && netState.isHost) {
-        broadcastState('Next round started!');
+        const roundPayload = {
+            type: 'START_ROUND',
+            gameState: getSerializableState(),
+            firstPlayerWinner: winner,
+            msg: 'Next round started!'
+        };
+        netState.conns.forEach(c => {
+            if (c.conn && c.conn.open) c.conn.send(roundPayload);
+        });
     }
+
+    runRoundStartSequence(winner);
 }
 
-function initRound() {
+function initRoundState() {
     const n = gameState.numPlayers;
     gameState.token++;
     gameState.deck = createDeck();
@@ -1433,10 +1456,12 @@ function initRound() {
     for (let p = 0; p < n; p++) {
         for (let k = 0; k < gameState.numPieces; k++) gameState.pieces[p].push(newPiece(p));
     }
+}
 
+function runRoundStartSequence(winner) {
     gameState.picking = true;
     updateUI();
-    pickFirstPlayer(winner => {
+    pickFirstPlayer(winner, () => {
         gameState.picking = false;
         gameState.currentPlayer = winner;
         ensureSelectedPiece(winner);
@@ -1446,10 +1471,15 @@ function initRound() {
     });
 }
 
-function pickFirstPlayer(done) {
+function initRound() {
+    initRoundState();
+    const winner = Math.floor(Math.random() * gameState.numPlayers);
+    runRoundStartSequence(winner);
+}
+
+function pickFirstPlayer(winner, done) {
     const n = gameState.numPlayers;
     const token = gameState.token;
-    const winner = Math.floor(Math.random() * n);
 
     const overlay = document.getElementById('first-picker');
     const chipsEl = document.getElementById('picker-chips');
@@ -1489,7 +1519,7 @@ function pickFirstPlayer(done) {
             setTimeout(() => {
                 if (token !== gameState.token) return;
                 overlay.style.display = 'none';
-                done(winner);
+                done();
             }, 450);
             return;
         }
@@ -1671,7 +1701,7 @@ function evaluateMove(pIdx, pieceIdx, card) {
     return { state: finalState };
 }
 
-// --- Player Interactions & Piece Selection Fix ---
+// --- Player Interactions & Robust Piece Selection ---
 
 function getSelPiece() {
     return gameState.selByPlayer[gameState.currentPlayer];
@@ -1727,29 +1757,19 @@ function choosePiece(i) {
     const cur = gameState.currentPlayer;
     if (netState.setupMode === 'online' && netState.myPlayerIdx !== cur) return;
 
-    const arr = gameState.pieces[cur];
-    let target = i;
-
-    // If clicking already-selected piece on a stack, cycle through pieces in stack
-    if (i === gameState.selByPlayer[cur]) {
-        const stack = [];
-        arr.forEach((pc, k) => { if (!pc.finished && samePos(pc, arr[i])) stack.push(k); });
-        if (stack.length > 1) target = stack[(stack.indexOf(i) + 1) % stack.length];
-    }
-
-    gameState.selByPlayer[cur] = target;
+    gameState.selByPlayer[cur] = i;
     gameState.swapSelected = false;
-
-    if (netState.setupMode === 'online' && !netState.isHost) {
-        updateUI();
-        refreshPreview();
-        sendNetAction({ action: 'CHOOSE_PIECE', pieceIdx: target });
-        return;
-    }
 
     updateUI();
     refreshPreview();
-    if (netState.setupMode === 'online' && netState.isHost) broadcastState();
+
+    if (netState.setupMode === 'online') {
+        if (!netState.isHost) {
+            sendNetAction({ action: 'CHOOSE_PIECE', pieceIdx: i });
+        } else {
+            broadcastState();
+        }
+    }
 }
 
 function setStatus(msg, isError) {
@@ -1767,7 +1787,7 @@ function pieceRadiusPx() {
     return isHex() ? HEX.a : SQ.T;
 }
 
-// --- Canvas Click Listener: Fixed Piece Selection ---
+// --- Canvas Click Listener ---
 canvas.addEventListener('mousedown', (e) => {
     if (!board || gameState.gameOver || gameState.picking) return;
     const cur = gameState.currentPlayer;
@@ -1778,38 +1798,67 @@ canvas.addEventListener('mousedown', (e) => {
     const rect = canvas.getBoundingClientRect();
     const x = (e.clientX - rect.left) * (canvas.width / rect.width);
     const y = (e.clientY - rect.top) * (canvas.height / rect.height);
-    const hitR = pieceRadiusPx() * 0.9;
+    
+    const R = pieceRadiusPx();
+    const pieceHitR = R * 1.35;
 
-    // Check if player clicked on one of their own active pieces
-    let bestPiece = -1, dPiece = Infinity;
-    gameState.pieces[cur].forEach((pc, i) => {
+    // 1. Find all active owned pieces under cursor
+    const myPieces = gameState.pieces[cur];
+    let clickedPieces = [];
+    let minPieceDist = Infinity;
+
+    myPieces.forEach((pc, i) => {
         if (pc.finished) return;
         const c = toPixel(pc);
         const d = Math.hypot(x - c.x, y - c.y);
-        if (d < dPiece) { dPiece = d; bestPiece = i; }
+        if (d <= pieceHitR) {
+            clickedPieces.push({ index: i, dist: d, pos: { x: pc.x, y: pc.y } });
+            if (d < minPieceDist) minPieceDist = d;
+        }
     });
 
-    // Distance to current move preview
+    // 2. Distance to move preview ghost
     let dPending = Infinity;
     if (gameState.pendingMove) {
         const c = toPixel(gameState.pendingMove);
         dPending = Math.hypot(x - c.x, y - c.y);
     }
 
-    if (dPiece <= hitR) {
-        // If clicking a different piece OR if pending move is not closer, select the piece
-        if (bestPiece !== getSelPiece() || dPiece < dPending || !gameState.pendingMove) {
-            choosePiece(bestPiece);
-            return;
-        }
-    }
-
-    if (dPending <= hitR && gameState.pendingMove) {
+    // Decision Logic:
+    // A. Clicked directly on pending move ghost
+    if (gameState.pendingMove && dPending <= R * 1.1 && (clickedPieces.length === 0 || dPending < minPieceDist)) {
         finishMove(gameState.pendingMove);
         return;
     }
 
-    // Clicked elsewhere on board: clear selection/preview
+    // B. Clicked on an owned piece -> switch / select piece
+    if (clickedPieces.length > 0) {
+        const currentSel = getSelPiece();
+        const containsCurrent = clickedPieces.some(p => p.index === currentSel);
+
+        let nextPieceIdx;
+        if (containsCurrent) {
+            const anchorPos = myPieces[currentSel];
+            const stack = [];
+            myPieces.forEach((pc, k) => {
+                if (!pc.finished && samePos(pc, anchorPos)) stack.push(k);
+            });
+
+            if (stack.length > 1) {
+                nextPieceIdx = stack[(stack.indexOf(currentSel) + 1) % stack.length];
+            } else {
+                nextPieceIdx = currentSel;
+            }
+        } else {
+            clickedPieces.sort((a, b) => a.dist - b.dist);
+            nextPieceIdx = clickedPieces[0].index;
+        }
+
+        choosePiece(nextPieceIdx);
+        return;
+    }
+
+    // C. Clicked empty board area -> clear selection/preview
     if (gameState.pendingMove || gameState.selectedCardIdx !== -1) {
         gameState.pendingMove = null;
         gameState.selectedCardIdx = -1;
