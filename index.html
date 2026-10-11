@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FlipSlide: The Art of Isometric Interference</title>
+    <title>FlipSlide Online</title>
+    <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <style>
         :root {
             --bg-color: #f0f4f8;
@@ -396,7 +397,16 @@
 
         #picker-result { font-size: 1.05rem; font-weight: bold; color: #555; min-height: 1.4em; }
 
-    </style>
+    
+.card.back{background:repeating-linear-gradient(45deg,#d0d7f5,#d0d7f5 6px,#eef1ff 6px,#eef1ff 12px);border-top:6px solid #868e96;cursor:default}
+.card.back:hover{transform:none}
+#chat{position:fixed;right:12px;bottom:12px;z-index:3000;display:none;flex-direction:column;align-items:flex-end;gap:6px}
+#chat-box{display:none;flex-direction:column;gap:6px;width:290px;background:#fff;border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.28);padding:8px;box-sizing:border-box}
+#chat-log{height:170px;overflow-y:auto;font-size:.85rem;line-height:1.4;color:#333;word-break:break-word;border-bottom:1px solid #eee;padding-bottom:4px}
+#chat-in{display:flex;gap:6px}#chat-in input{text-align:left;padding:7px}
+#voice-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}#voice-msg{font-size:.75rem;color:#c92a2a}
+.seat-row{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:1rem}
+</style>
 </head>
 <body>
 
@@ -478,6 +488,20 @@
             </div>
 
             <button class="btn" style="background: #228be6; margin-top:10px;" onclick="startGame()">START MATCH</button>
+
+            <div id="online-box" style="display:none;flex-direction:column;gap:8px;border-top:2px solid #eee;padding-top:12px;">
+                <div class="label-text">Online play</div>
+                <button class="btn" id="create-room-btn" style="background:#2f9e44;" onclick="createRoom()">CREATE ONLINE ROOM</button>
+                <div id="host-hint" style="display:none;font-size:.8rem;color:#777;">Hosting unavailable.</div>
+                <div class="label-text" style="margin-top:6px;">&hellip;or join a friend's game</div>
+                <div class="player-config-row">
+                    <input type="text" id="join-code" placeholder="Room code" maxlength="5" style="text-transform:uppercase;">
+                    <input type="text" id="join-name" placeholder="Your name" maxlength="20">
+                </div>
+                <button class="btn" onclick="joinRoom()">JOIN ROOM</button>
+                <div id="online-msg" style="color:#c92a2a;font-size:.85rem;"></div>
+            </div>
+
         </div>
     </div>
 
@@ -601,6 +625,28 @@
             <button class="btn" id="next-round-btn" onclick="startNextRound()" style="background: #228be6;">NEXT ROUND</button>
             <button class="btn" id="new-match-btn" onclick="showStartScreen()" style="background: #868e96;">CHANGE SETUP</button>
         </div>
+    </div>
+
+    
+    <div id="lobby-modal" class="modal-overlay">
+        <div class="modal-box">
+            <div class="modal-title">GAME ROOM</div>
+            <div class="modal-subtitle">Share this code with your friends</div>
+            <div id="lobby-code" style="font-size:2.4rem;font-weight:bold;letter-spacing:8px;color:#1c7ed6;"></div>
+            <button class="btn" id="copy-invite">Copy invite link</button>
+            <div id="lobby-seats" style="text-align:left;"></div>
+            <div id="lobby-msg" style="color:#666;font-size:.85rem;word-break:break-all;"></div>
+            <button class="btn" id="lobby-start" style="background:#228be6;">START MATCH</button>
+            <button class="btn" style="background:#868e96;" onclick="leaveRoom()">LEAVE ROOM</button>
+        </div>
+    </div>
+    <div id="chat">
+        <div id="chat-box">
+            <div id="chat-log"></div>
+            <div id="chat-in"><input type="text" id="chat-text" maxlength="300" placeholder="Message&hellip;"><button class="btn" id="chat-send">Send</button></div>
+            <div id="voice-row"><button class="btn" id="voice-btn" style="background:#2f9e44;">&#127908; Join voice</button><button class="btn" id="mute-btn" style="display:none;">Mute</button><span id="voice-msg"></span></div>
+        </div>
+        <button class="btn" id="chat-tog" style="background:#228be6;">&#128172; Chat<span id="chat-badge"></span></button>
     </div>
 
     <div id="top-bar">
@@ -1883,6 +1929,448 @@ function aiTurn() {
         executeSwap();
     }
 }
+
+
+// ================= ONLINE MULTIPLAYER LAYER =================
+// Host's browser runs the engine above; guests send moves, the host sends back state + each player's own hand.
+const $ = id => document.getElementById(id);
+let RC = null, room = null, online = false, isHost = false, started = false, canHost = false;
+let mySeat = -1, hostSeat = 0, seatPeer = {}, assign = {}, lobbyData = null, code = '', joinName = 'Player';
+let turnNo = 0, lastS = '', lastH = {}, lastCfg = '', lastTurn = -1, hb = null, joinT = null, unread = 0;
+const _o = {};
+['isAI','finishMove','executeSwap','renderHand','updateUI','scheduleAI','advanceTurn','initRound','pickFirstPlayer','showEndScreen','showStartScreen'].forEach(n => _o[n] = window[n]);
+
+const myPeer = () => { const p = room && room.peers().find(x => x.isMe && x.sameTab); return p ? p.peer : null; };
+const send = (t, d) => { if (room) room.emit(t, d).catch(() => {}); };
+const clean = (s, n) => String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/g, '').trim().slice(0, n);
+const myName = () => isHost ? gameState.playerNames[hostSeat] : joinName;
+
+// --- Engine wrappers ---
+window.isAI = i => online ? i !== mySeat : _o.isAI(i);   // "not controllable on this device"
+window.finishMove = function (ns) {
+    if (online && !isHost) {
+        send('act', { k: 'move', piece: getSelPiece(), card: gameState.selectedCardIdx });
+        gameState.pendingMove = null; gameState.selectedCardIdx = -1; _o.updateUI(); return;
+    }
+    return _o.finishMove(ns);
+};
+window.executeSwap = function () {
+    if (online && !isHost) { send('act', { k: 'swap' }); gameState.swapSelected = false; _o.updateUI(); return; }
+    return _o.executeSwap();
+};
+window.renderHand = function (p, id) {
+    if (!online || p === mySeat) return _o.renderHand(p, id);
+    const d = $(id); d.innerHTML = '';
+    gameState.hands[p].forEach(() => { const e = document.createElement('div'); e.className = 'card back'; d.appendChild(e); });
+};
+window.updateUI = function () {
+    _o.updateUI();
+    if (!online) return;
+    for (let p = 0; p < gameState.numPlayers; p++) {
+        const el = $(`p${p + 1}-panel-name`);
+        if (el) el.innerText = gameState.playerNames[p] + (p === mySeat ? ' (you)' : '');
+    }
+    if (isHost) setTimeout(() => pushAll(false), 0);
+};
+window.scheduleAI = function () {
+    if (online && (!isHost || !gameState.isAI[gameState.currentPlayer])) return;
+    return _o.scheduleAI();
+};
+window.advanceTurn = function () { turnNo++; return _o.advanceTurn(); };
+window.initRound = function () {
+    if (online && (!isHost || !started)) return;   // host waits in the lobby; guests follow the host
+    turnNo++; return _o.initRound();
+};
+window.pickFirstPlayer = function (done) {
+    if (!online || !isHost) return _o.pickFirstPlayer(done);
+    const n = gameState.numPlayers, w = Math.floor(Math.random() * n), r = Math.random;
+    pushAll(true); send('pick', { w });
+    Math.random = () => (w + 0.5) / n;                 // make the original animation land on w
+    try { _o.pickFirstPlayer(done); } finally { Math.random = r; }
+};
+window.showEndScreen = function (w, pts, over) {
+    _o.showEndScreen(w, pts, over);
+    if (!online) return;
+    if (isHost) {
+        send('end', { w, pts, over });
+        const nb = $('new-match-btn');
+        nb.innerText = over ? 'PLAY AGAIN (same settings)' : 'RESTART MATCH';
+        nb.style.background = '#228be6'; nb.onclick = rematch;
+    } else {
+        $('next-round-btn').style.display = 'none'; $('new-match-btn').style.display = 'none';
+        $('win-message').innerText += ' Waiting for the host\u2026';
+    }
+};
+window.showStartScreen = function () { if (online) { leaveRoom(); return; } _o.showStartScreen(); };
+function rematch() {
+    $('end-modal').style.display = 'none';
+    gameState.scores = [0, 0, 0]; updateScoreBoard(); initRound();
+}
+
+// --- Host: state out ---
+function snap() {
+    const g = gameState;
+    return { b: g.board, n: g.numPlayers, k: g.numPieces, nm: g.playerNames, ai: g.isAI, pc: g.pieces, sc: g.scores,
+             mg: g.matchGoal, cp: g.currentPlayer, go: g.gameOver, pk: g.picking, t: turnNo, hc: g.hands.map(h => h.length) };
+}
+function pushAll(force) {
+    if (!online || !isHost || !room || !started) return;
+    const j = JSON.stringify(snap());
+    if (force || j !== lastS) { lastS = j; send('state', JSON.parse(j)); }
+    gameState.hands.forEach((h, p) => {
+        const peer = seatPeer[p]; if (peer == null) return;
+        const hj = JSON.stringify(h);
+        if (force || hj !== lastH[p]) { lastH[p] = hj; send('hand', { to: peer, seat: p, hand: h }); }
+    });
+}
+function pushLobby() {
+    if (!isHost || !room) return;
+    const g = gameState, pr = room.peers().map(p => p.peer), seats = [], a = {};
+    for (let i = 0; i < g.numPlayers; i++)
+        seats.push({ h: !g.isAI[i], nm: g.playerNames[i], t: i === hostSeat || (seatPeer[i] != null && pr.includes(seatPeer[i])) });
+    const mp = myPeer(); if (mp) a[mp] = hostSeat;
+    for (const s in seatPeer) if (pr.includes(seatPeer[s])) a[seatPeer[s]] = +s;
+    const l = { seats, a, st: started, code };
+    assign = a; lobbyData = l; renderLobby(l); send('lobby', l);
+}
+function renderLobby(l) {
+    $('lobby-code').innerText = l.code || code;
+    const box = $('lobby-seats'); box.innerHTML = '';
+    l.seats.forEach((s, i) => {
+        const r = document.createElement('div'); r.className = 'seat-row';
+        const dot = document.createElement('span'); dot.className = 'dot'; dot.style.background = PLAYER_COLORS[i];
+        const t = document.createElement('span');
+        t.textContent = !s.h ? `${s.nm} (computer)` : s.t ? `${s.nm}${i === mySeat ? ' (you)' : ''}` : 'Waiting for player\u2026';
+        r.appendChild(dot); r.appendChild(t); box.appendChild(r);
+    });
+    const full = l.seats.every(s => !s.h || s.t);
+    $('lobby-start').style.display = isHost ? '' : 'none';
+    $('lobby-start').disabled = !full;
+    $('lobby-msg').innerText = isHost ? (full ? 'Everyone is here \u2013 start when ready.' : 'Waiting for players to join\u2026') : 'Waiting for the host to start\u2026';
+}
+
+// --- Guest: state in ---
+function applySnap(s) {
+    const g = gameState;
+    Object.assign(g, { board: s.b, numPlayers: s.n, numPieces: s.k, playerNames: s.nm, isAI: s.ai, pieces: s.pc, scores: s.sc,
+                       matchGoal: s.mg, currentPlayer: s.cp, gameOver: s.go, picking: s.pk });
+    if (s.b + s.n !== lastCfg) {
+        lastCfg = s.b + s.n; setupBoard(s.b, s.n);
+        $('panel-green').style.display = s.n === 3 ? 'flex' : 'none';
+        document.body.classList.toggle('three-players', s.n === 3);
+        document.body.classList.toggle('hex-board', s.b === 'hex');
+    }
+    for (let p = 0; p < 3; p++) if (p !== mySeat) g.hands[p] = Array.from({ length: s.hc[p] || 0 }, () => ({ type: 'x', color: 'neutral' }));
+    if (s.t !== lastTurn) {
+        lastTurn = s.t; g.selectedCardIdx = -1; g.pendingMove = null; g.swapSelected = false;
+        if (!s.pk && g.pieces[s.cp]) ensureSelectedPiece(s.cp);
+    }
+    updateScoreBoard();
+    if (!s.go) $('end-modal').style.display = 'none';
+    $('lobby-modal').style.display = 'none'; $('start-modal').style.display = 'none';
+    updateUI();
+}
+
+// --- Room wiring ---
+function wireRoom() {
+    room.on('join', m => {
+        if (!isHost) return;
+        const g = gameState, nm = clean(m.data && m.data.name, 20) || 'Player', pr = room.peers().map(p => p.peer);
+        let s = Object.keys(seatPeer).find(k => seatPeer[k] === m.peer);
+        if (s == null) {
+            const free = [];
+            for (let i = 0; i < g.numPlayers; i++)
+                if (i !== hostSeat && !g.isAI[i] && (seatPeer[i] == null || !pr.includes(seatPeer[i]))) free.push(i);
+            if (free.length) { const byName = free.find(i => g.playerNames[i] === nm); s = byName != null ? byName : free[0]; }
+        }
+        if (s != null) { s = +s; seatPeer[s] = m.peer; g.playerNames[s] = nm; lastH[s] = null; updateScoreBoard(); updateUI(); }
+        pushLobby(); if (started) pushAll(true);
+    });
+    room.on('act', m => {
+        if (!isHost || !started) return;
+        const d = m.data || {}, g = gameState, s = +Object.keys(seatPeer).find(k => seatPeer[k] === m.peer);
+        if (isNaN(s) || s !== g.currentPlayer || g.gameOver || g.picking || g.isAI[s]) return;
+        if (d.k === 'swap') { executeSwap(); return; }
+        if (!Number.isInteger(d.piece) || !Number.isInteger(d.card)) return;
+        const pc = g.pieces[s][d.piece], card = g.hands[s][d.card];
+        const r = pc && card && !pc.finished ? evaluateMove(s, d.piece, card) : { error: 1 };
+        if (r.error) { pushAll(true); return; }
+        g.selByPlayer[s] = d.piece; g.selectedCardIdx = d.card; finishMove(r.state);
+    });
+    room.on('lobby', m => {
+        const l = m.data; if (isHost || !l || !l.seats) return;
+        lobbyData = l; assign = l.a || {}; code = l.code || code;
+        const me = assign[myPeer()]; mySeat = me == null ? -1 : me;
+        clearTimeout(joinT); renderLobby(l);
+        if (!l.st) { $('lobby-modal').style.display = 'flex'; $('start-modal').style.display = 'none'; }
+    });
+    room.on('state', m => { if (!isHost && m.data && m.data.pc) applySnap(m.data); });
+    room.on('hand', m => {
+        const d = m.data; if (isHost || !d || d.to !== myPeer() || !Array.isArray(d.hand)) return;
+        mySeat = d.seat; gameState.hands[d.seat] = d.hand; updateUI();
+    });
+    room.on('pick', m => {
+        if (isHost || !m.data) return;
+        const w = +m.data.w, n = gameState.numPlayers, r = Math.random;
+        $('end-modal').style.display = 'none';
+        Math.random = () => (w + 0.5) / n;
+        try { _o.pickFirstPlayer(() => {}); } finally { Math.random = r; }
+    });
+    room.on('end', m => { if (!isHost && m.data) setTimeout(() => showEndScreen(m.data.w, m.data.pts, m.data.over), 0); });
+    room.on('chat', m => {
+        const d = m.data || {}, s = assign[m.peer];
+        const nm = s != null && gameState.playerNames[s] ? gameState.playerNames[s] : (clean(d.nm, 20) || 'Spectator');
+        addChat(nm, clean(d.t, 300), m.isMe, s);
+    });
+    room.on('sig', m => { const p = (sigQ[m.peer] || Promise.resolve()).then(() => onSig(m)).catch(() => {}); sigQ[m.peer] = p; });
+    room.onPeers(c => { c.left.forEach(p => closePc(p.peer)); if (isHost) pushLobby(); });
+    room.onClose = () => { if (online) { leaveRoom(); $('online-msg').innerText = 'Connection to the host was lost.'; } };
+}
+
+async function createRoom() {
+    const msg = $('online-msg'); msg.innerText = '';
+    const n = selectedPlayerCount(), humans = [];
+    for (let i = 0; i < n; i++) if ($(`p${i + 1}-type`).value === 'human') humans.push(i);
+    if (humans.length < 2) { msg.innerText = 'Set at least two players to Human so a friend can take a seat.'; return; }
+    code = Array.from({ length: 5 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 32)]).join('');
+    try { room = await RC.host(code); } catch (e) { msg.innerText = 'Could not open a room, please try again (' + (e && e.code || 'error') + ').'; return; }
+    online = true; isHost = true; started = false; seatPeer = {}; hostSeat = humans[0]; mySeat = hostSeat;
+    startGame();                                       // configures board/panels; initRound is held until Start
+    wireRoom(); openChat(true); $('lobby-modal').style.display = 'flex';
+    $('lobby-start').onclick = () => { started = true; $('lobby-modal').style.display = 'none'; pushLobby(); initRound(); };
+    pushLobby(); hb = setInterval(() => { pushLobby(); if (started) pushAll(true); }, 4000);
+}
+
+async function joinRoom() {
+    const msg = $('online-msg'); msg.innerText = '';
+    const c = clean($('join-code').value, 5).toUpperCase();
+    if (c.length < 5) { msg.innerText = 'Enter the 5-character room code.'; return; }
+    joinName = clean($('join-name').value, 20) || 'Player';
+    try { room = await RC.join(c); } catch (e) { msg.innerText = e && e.code === 'peer-unavailable' ? 'No game found with that code.' : 'Could not join (' + (e && e.code || 'error') + ').'; return; }
+    online = true; isHost = false; code = c; mySeat = -1; lobbyData = null;
+    wireRoom(); openChat(true);
+    $('start-modal').style.display = 'none'; $('lobby-modal').style.display = 'flex';
+    $('lobby-code').innerText = c; $('lobby-seats').innerHTML = ''; $('lobby-start').style.display = 'none'; $('lobby-msg').innerText = 'Connecting\u2026';
+    send('join', { name: joinName });
+    joinT = setTimeout(() => { if (!lobbyData) { leaveRoom(); $('online-msg').innerText = 'No game found with that code.'; } }, 9000);
+    hb = setInterval(() => { if (assign[myPeer()] === undefined) send('join', { name: joinName }); }, 4000);
+}
+
+function leaveRoom() {
+    clearInterval(hb); clearTimeout(joinT); stopVoice();
+    if (room) { room.leave().catch(() => {}); }
+    room = null; online = false; isHost = false; started = false; mySeat = -1; seatPeer = {}; assign = {}; lobbyData = null;
+    lastS = ''; lastH = {}; lastCfg = ''; lastTurn = -1; gameState.token++;
+    $('lobby-modal').style.display = 'none'; $('chat').style.display = 'none'; $('chat-log').innerHTML = '';
+    $('new-match-btn').onclick = null;
+    $('new-match-btn').style.display = ''; $('next-round-btn').style.display = '';
+    _o.showStartScreen(); updateScoreBoard();
+}
+
+// --- Chat ---
+function openChat(show) { $('chat').style.display = show ? 'flex' : 'none'; }
+function addChat(nm, t, me, seat) {
+    const l = $('chat-log'), d = document.createElement('div'), b = document.createElement('b');
+    b.textContent = nm + ': '; b.style.color = (seat != null && seat >= 0) ? PLAYER_COLORS[seat] : '#555';
+    d.appendChild(b); d.appendChild(document.createTextNode(t)); l.appendChild(d); l.scrollTop = l.scrollHeight;
+    if ($('chat-box').style.display !== 'flex' && !me) { unread++; $('chat-badge').textContent = ' (' + unread + ')'; }
+}
+function sendChat() {
+    const t = clean($('chat-text').value, 300); if (!t) return;
+    $('chat-text').value = ''; send('chat', { nm: myName(), t });
+}
+$('chat-tog').onclick = () => {
+    const b = $('chat-box'), open = b.style.display !== 'flex';
+    b.style.display = open ? 'flex' : 'none'; if (open) { unread = 0; $('chat-badge').textContent = ''; $('chat-text').focus(); }
+};
+$('chat-send').onclick = sendChat;
+$('chat-text').addEventListener('keydown', e => { if (e.key === 'Enter') sendChat(); });
+$('copy-invite').onclick = () => {
+    const url = location.href.split('#')[0] + '#room=' + code;
+    const fail = () => { $('lobby-msg').innerText = 'Share this link or the code ' + code + ': ' + url; };
+    try { navigator.clipboard.writeText(url).then(() => { $('lobby-msg').innerText = 'Link copied!'; }, fail); } catch (e) { fail(); }
+};
+
+// --- Voice (peer-to-peer WebRTC audio, signalling over the room) ---
+let vStream = null, vOn = false, pcs = {}, sigQ = {};
+const iceCfg = () => ({ iceServers: ICE_LIST || [{ urls: 'stun:stun.l.google.com:19302' }] });
+function closePc(peer) {
+    if (pcs[peer]) { try { pcs[peer].close(); } catch (e) {} delete pcs[peer]; }
+    const a = document.getElementById('au-' + peer); if (a) a.remove();
+}
+function mkPc(peer) {
+    if (pcs[peer]) return pcs[peer];
+    const pc = new RTCPeerConnection(iceCfg()); pcs[peer] = pc;
+    vStream.getTracks().forEach(t => pc.addTrack(t, vStream));
+    pc.onicecandidate = e => { if (e.candidate) send('sig', { to: peer, k: 'ice', c: e.candidate.toJSON() }); };
+    pc.ontrack = e => {
+        let a = document.getElementById('au-' + peer);
+        if (!a) { a = document.createElement('audio'); a.id = 'au-' + peer; a.autoplay = true; document.body.appendChild(a); }
+        a.srcObject = e.streams[0];
+    };
+    return pc;
+}
+async function onSig(m) {
+    const d = m.data; if (!vOn || !d || d.to !== myPeer()) return;
+    if (d.k === 'offer') {
+        closePc(m.peer); const pc = mkPc(m.peer);
+        await pc.setRemoteDescription({ type: 'offer', sdp: String(d.s) });
+        const a = await pc.createAnswer(); await pc.setLocalDescription(a);
+        send('sig', { to: m.peer, k: 'answer', s: pc.localDescription.sdp });
+    } else if (d.k === 'answer' && pcs[m.peer]) await pcs[m.peer].setRemoteDescription({ type: 'answer', sdp: String(d.s) });
+    else if (d.k === 'ice' && pcs[m.peer] && pcs[m.peer].remoteDescription) await pcs[m.peer].addIceCandidate(d.c);
+}
+async function toggleVoice() {
+    const msg = $('voice-msg'); msg.innerText = '';
+    if (vOn) { stopVoice(); return; }
+    try { vStream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+    catch (e) { msg.innerText = 'Microphone not available here.'; return; }
+    vOn = true; $('voice-btn').innerHTML = '&#127908; Leave voice'; $('voice-btn').style.background = '#fa5252'; $('mute-btn').style.display = '';
+    room.presence({ voice: true }).catch(() => {});
+    for (const p of room.peers()) {
+        if (p.isMe || !p.presence.voice) continue;
+        try { const pc = mkPc(p.peer); const o = await pc.createOffer(); await pc.setLocalDescription(o); send('sig', { to: p.peer, k: 'offer', s: pc.localDescription.sdp }); } catch (e) {}
+    }
+}
+function stopVoice() {
+    vOn = false; Object.keys(pcs).forEach(closePc);
+    if (vStream) { vStream.getTracks().forEach(t => t.stop()); vStream = null; }
+    if (room) room.presence({ voice: null }).catch(() => {});
+    $('voice-btn').innerHTML = '&#127908; Join voice'; $('voice-btn').style.background = '#2f9e44';
+    $('mute-btn').style.display = 'none'; $('mute-btn').innerText = 'Mute';
+}
+$('voice-btn').onclick = toggleVoice;
+$('mute-btn').onclick = () => {
+    if (!vStream) return; const t = vStream.getAudioTracks()[0]; t.enabled = !t.enabled;
+    $('mute-btn').innerText = t.enabled ? 'Mute' : 'Unmute';
+};
+
+// ================= NETWORK SETTINGS (edit this block) =================
+// TURN relay servers make the game work on school/corporate networks that block direct connections.
+// Option A (easiest): free Metered.ca account -> fill in your app domain + API key below.
+// Option B: any TURN service (Cloudflare, Twilio, your own coturn) -> add entries to iceServers, e.g.
+//   { urls: ['turn:turn.example.org:3478?transport=udp', 'turns:turn.example.org:443?transport=tcp'], username: '...', credential: '...' }
+// Option C: your own PeerJS signalling server -> peerServer: { host: 'my-peer.example.org', port: 443, path: '/', secure: true }
+const NET_CONFIG = {
+    meteredDomain: '',      // e.g. 'myschool.metered.live'
+    meteredApiKey: '',      // e.g. 'abc123...'
+    iceServers: [
+        { urls: 'stun:stun.relay.metered.ca:80' },
+        { urls: 'turn:global.relay.metered.ca:80', username: 'f0e6434408cc0b855ef1a27f', credential: 'TwQjxqq6IJNrMrq8' },
+        { urls: 'turn:global.relay.metered.ca:80?transport=tcp', username: 'f0e6434408cc0b855ef1a27f', credential: 'TwQjxqq6IJNrMrq8' },
+        { urls: 'turn:global.relay.metered.ca:443', username: 'f0e6434408cc0b855ef1a27f', credential: 'TwQjxqq6IJNrMrq8' },
+        { urls: 'turns:global.relay.metered.ca:443?transport=tcp', username: 'f0e6434408cc0b855ef1a27f', credential: 'TwQjxqq6IJNrMrq8' }
+    ],
+    peerServer: null
+};
+let ICE_LIST = null;
+async function loadIce() {
+    if (ICE_LIST) return ICE_LIST;
+    let l = [{ urls: 'stun:stun.l.google.com:19302' }].concat(NET_CONFIG.iceServers || []);
+    let relay = (NET_CONFIG.iceServers || []).length > 0;
+    if (NET_CONFIG.meteredDomain && NET_CONFIG.meteredApiKey) {
+        try {
+            const r = await fetch(`https://${NET_CONFIG.meteredDomain}/api/v1/turn/credentials?apiKey=${encodeURIComponent(NET_CONFIG.meteredApiKey)}`);
+            const j = await r.json();
+            if (Array.isArray(j) && j.length) { l = l.concat(j); relay = true; }
+        } catch (e) { console.warn('FlipSlide: could not load TURN credentials', e); }
+    }
+    if (!relay) console.warn('FlipSlide: no TURN relay configured - online play may fail on restrictive networks.');
+    return (ICE_LIST = l);
+}
+const peerOpts = () => loadIce().then(l => Object.assign({ config: { iceServers: l } }, NET_CONFIG.peerServer || {}));
+
+// --- Networking: PeerJS star topology (host = hub). Replaces the claude.ai room capability. ---
+function mkRoom(isH, peerObj, hostConn, id) {
+    const ls = {}, pl = [], conns = {}, my = isH ? 'host' : id;
+    let mePr = {}, roster = [{ peer: my, presence: {} }], prev = [], closed = false;
+    const msg = (t, d, from) => ({ topic: t, data: d, peer: from, by: null, isMe: from === my, sameTab: from === my, kind: 'viewer', guest: false });
+    const disp = (t, d, from) => (ls[t] || []).slice().forEach(f => { try { f(msg(t, d, from)); } catch (e) {} });
+    const snapPeers = () => {
+        const l = isH ? [{ peer: 'host', presence: mePr }].concat(Object.keys(conns).map(k => ({ peer: k, presence: conns[k].pr }))) : roster;
+        return l.map(p => ({ peer: p.peer, isMe: p.peer === my, sameTab: p.peer === my, kind: 'viewer', guest: false, by: null, presence: p.presence || {}, updatedAt: 0 }));
+    };
+    const fire = () => {
+        const cur = snapPeers(), ids = new Set(cur.map(p => p.peer)), old = new Set(prev.map(p => p.peer));
+        const ch = { peers: cur, joined: cur.filter(p => !old.has(p.peer)), left: prev.filter(p => !ids.has(p.peer)), updated: [] };
+        prev = cur; pl.slice().forEach(f => f(ch));
+    };
+    const bcastRoster = () => {
+        const l = snapPeers().map(p => ({ peer: p.peer, presence: p.presence }));
+        Object.values(conns).forEach(x => x.c.send({ c: 'peers', l })); fire();
+    };
+    const api = {
+        onClose: null,
+        on(t, f) { (ls[t] = ls[t] || []).push(f); return () => { ls[t] = (ls[t] || []).filter(x => x !== f); }; },
+        emit(t, d) {
+            if (isH) {
+                if (d && typeof d === 'object' && d.to && (t === 'hand' || t === 'sig')) { if (conns[d.to]) conns[d.to].c.send({ t, d, from: 'host' }); }  // private: only the addressee
+                else { Object.values(conns).forEach(x => x.c.send({ t, d, from: 'host' })); disp(t, d, 'host'); }
+            } else hostConn.send({ t, d });
+            return Promise.resolve();
+        },
+        peers: snapPeers,
+        onPeers(f) { pl.push(f); return () => {}; },
+        presence(p) {
+            if (isH) { mePr = Object.assign({}, mePr, p); for (const k in p) if (p[k] === null) delete mePr[k]; bcastRoster(); }
+            else hostConn.send({ c: 'pres', p });
+            return Promise.resolve();
+        },
+        leave() { closed = true; try { peerObj.destroy(); } catch (e) {} return Promise.resolve(); }
+    };
+    if (isH) {
+        peerObj.on('connection', c => {
+            c.on('open', () => { conns[c.peer] = { c, pr: {} }; bcastRoster(); });
+            c.on('data', m => {
+                const x = conns[c.peer]; if (!x || !m || typeof m !== 'object') return;
+                if (m.c === 'pres') { if (m.p && typeof m.p === 'object') { x.pr = m.p.voice ? { voice: true } : {}; bcastRoster(); } return; }
+                const t = m.t, d = m.d;
+                if (t === 'join' || t === 'act') disp(t, d, c.peer);                          // guests may only send these...
+                else if (t === 'chat') { Object.values(conns).forEach(y => y.c.send({ t, d, from: c.peer })); disp(t, d, c.peer); }
+                else if (t === 'sig' && d && typeof d.to === 'string') {                       // ...plus chat and addressed voice signalling
+                    if (d.to === 'host') disp(t, d, c.peer); else if (conns[d.to]) conns[d.to].c.send({ t, d, from: c.peer });
+                }
+            });
+            c.on('close', () => { delete conns[c.peer]; bcastRoster(); });
+            c.on('error', () => {});
+        });
+    } else {
+        hostConn.on('data', m => {
+            if (!m) return;
+            if (m.c === 'peers' && Array.isArray(m.l)) { roster = m.l; fire(); return; }
+            if (typeof m.t === 'string') disp(m.t, m.d, m.from);
+        });
+        hostConn.on('close', () => { if (!closed && api.onClose) api.onClose(); });
+    }
+    return api;
+}
+const rcHost = code => peerOpts().then(o => new Promise((res, rej) => {
+    const p = new Peer('flipslide-' + code.toLowerCase(), o); let done = false;
+    const t = setTimeout(() => { if (!done) { done = true; try { p.destroy(); } catch (e) {} rej({ code: 'timeout' }); } }, 10000);
+    p.on('open', () => { done = true; clearTimeout(t); res(mkRoom(true, p)); });
+    p.on('error', e => { if (!done) { done = true; clearTimeout(t); rej({ code: e.type }); } });
+}));
+const rcJoin = code => peerOpts().then(o => new Promise((res, rej) => {
+    const p = new Peer(undefined, o); let done = false;
+    const fail = e => { if (!done) { done = true; clearTimeout(t); try { p.destroy(); } catch (x) {} rej({ code: e && e.type || 'error' }); } };
+    const t = setTimeout(() => fail({ type: 'timeout' }), 25000);
+    p.on('error', fail);
+    p.on('open', id => {
+        const c = p.connect('flipslide-' + code.toLowerCase(), { reliable: true });
+        c.on('open', () => { if (!done) { done = true; clearTimeout(t); res(mkRoom(false, p, c, id)); } });
+        c.on('error', fail);
+    });
+}));
+
+// --- Start-up: light up online play only if PeerJS loaded ---
+(function () {
+    if (typeof Peer === 'undefined') return;
+    RC = { host: rcHost, join: rcJoin };
+    $('online-box').style.display = 'flex';
+    const m = /room=([A-Za-z0-9]{5})/.exec(location.hash + location.search);
+    if (m) { $('join-code').value = m[1].toUpperCase(); $('join-name').focus(); }
+})();
+
 
 // Initial setup on load
 onBoardChange();
