@@ -3,15 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FlipSlide Online</title>
-    <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <title>FlipSlide: The Art of Isometric Interference</title>
+    <!-- PeerJS for WebRTC room connections -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         :root {
             --bg-color: #f0f4f8;
             --board-bg: #ffffff;
             --p1-color: #1155cc; /* Blue */
             --p2-color: #cc0000; /* Red */
-            --p3-color: #009900; /* Green (hexagonal board only) */
+            --p3-color: #009900; /* Green */
             --safe-color: #e9ecef;
             --card-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
@@ -42,13 +43,16 @@
         }
 
         #score-board {
-            font-size: 1.2rem;
+            font-size: 1.1rem;
             font-weight: bold;
             color: #555;
             background: #f8f9fa;
             padding: 5px 15px;
             border-radius: 20px;
             border: 1px solid #dee2e6;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
 
         .score-val.blue { color: var(--p1-color); }
@@ -65,29 +69,31 @@
             height: calc(100vh - 50px);
             justify-content: center;
             align-items: center;
-            gap: 20px;
-            padding: 10px;
+            gap: 25px;
+            padding: 10px 20px;
             box-sizing: border-box;
         }
 
-        /* Side Panels */
+        /* Single Left Player Panel */
         .player-panel {
-            width: 140px;
+            width: 150px;
             height: 100%;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: flex-start;
-            padding-top: 10px;
-            background: rgba(255,255,255,0.6);
+            padding-top: 12px;
+            background: rgba(255,255,255,0.75);
             border-radius: 12px;
             overflow-y: auto;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            transition: border-color 0.3s ease;
         }
 
         .panel-title {
             font-weight: bold;
-            margin-bottom: 10px;
-            font-size: 1.0rem;
+            margin-bottom: 6px;
+            font-size: 1.05rem;
             text-transform: uppercase;
             text-align: center;
             padding: 0 5px;
@@ -97,7 +103,7 @@
         .panel-sub {
             font-size: 0.8rem;
             color: #666;
-            margin: -6px 0 10px;
+            margin: -2px 0 12px;
             text-align: center;
         }
 
@@ -112,8 +118,8 @@
         }
 
         .card {
-            width: 90px;
-            height: 125px;
+            width: 95px;
+            height: 128px;
             background: white;
             border: 2px solid #ccc;
             border-radius: 8px;
@@ -157,21 +163,14 @@
             line-height: 1.3;
         }
 
-        /* Card colours match the colour of the gridlines */
         .card.red { border-top: 6px solid #cc0000; color: var(--p2-color); }
         .card.blue { border-top: 6px solid #1155cc; color: var(--p1-color); }
         .card.green { border-top: 6px solid #009900; color: var(--p3-color); }
         .card.neutral { border-top: 6px solid #868e96; color: #333; }
 
-        /* On the hexagonal board the card colours are the full line colours */
         body.hex-board .card.red   { border-top-color: #ff0000; }
         body.hex-board .card.blue  { border-top-color: #0000ff; }
         body.hex-board .card.green { border-top-color: #009900; }
-
-        /* Compact layout used when three hands are on screen */
-        body.three-players .player-panel { width: 118px; }
-        body.three-players .card { width: 84px; height: 118px; }
-        body.three-players #game-layout { gap: 12px; }
 
         /* Board Area */
         #board-area {
@@ -191,7 +190,7 @@
             font-size: 1.1rem;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             text-align: center;
-            min-width: 200px;
+            min-width: 220px;
             transition: background-color 0.3s;
         }
 
@@ -219,10 +218,8 @@
             transition: background 0.2s;
         }
         .btn:hover { background: #495057; }
-        
         .btn.danger { background: #fa5252; }
         .btn.danger:hover { background: #e03131; }
-        
         .btn.confirm { background: #fcc419; color: #333; animation: pulse 1s infinite; }
         
         @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
@@ -233,7 +230,7 @@
             top: 0; left: 0; right: 0; bottom: 0;
             background: rgba(0,0,0,0.6);
             backdrop-filter: blur(4px);
-            display: none; /* Flex when active */
+            display: none;
             justify-content: center;
             align-items: center;
             z-index: 2000;
@@ -241,46 +238,44 @@
 
         .modal-box {
             background: white;
-            padding: 40px;
+            padding: 30px;
             border-radius: 12px;
             text-align: center;
             box-shadow: 0 20px 50px rgba(0,0,0,0.3);
-            width: 320px;
+            width: 350px;
             max-height: 92vh;
             overflow-y: auto;
-            box-sizing: content-box;
+            box-sizing: border-box;
             display: flex;
             flex-direction: column;
-            gap: 15px;
+            gap: 12px;
         }
 
-        .setup-row {
+        .menu-btn-list {
             display: flex;
             flex-direction: column;
-            gap: 15px;
+            gap: 12px;
+            margin-top: 10px;
         }
 
-        .setup-group {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
+        .menu-main-btn {
+            padding: 14px;
+            font-size: 1rem;
+            border-radius: 8px;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+            color: white;
+            transition: transform 0.15s, background 0.2s;
         }
+        .menu-main-btn:hover { transform: scale(1.02); }
 
-        .player-config-row {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-        }
+        .setup-row { display: flex; flex-direction: column; gap: 8px; }
+        .setup-group { display: flex; flex-direction: column; gap: 6px; }
+        .player-config-row { display: flex; gap: 8px; align-items: center; }
+        .player-config-row select { width: 42%; }
+        .player-config-row input { width: 58%; }
 
-        .player-config-row select {
-            width: 42%;
-        }
-
-        .player-config-row input {
-            width: 58%;
-        }
-
-        /* Special sizing for Help Modal */
         .modal-box.large {
             width: 600px;
             max-width: 90%;
@@ -298,53 +293,46 @@
             border-bottom: 1px solid #eee;
         }
 
-        .modal-title { font-size: 2rem; font-weight: bold; margin-bottom: 2px; color: #333; letter-spacing: 2px; text-align: center;}
+        .modal-title { font-size: 1.8rem; font-weight: bold; margin-bottom: 2px; color: #333; letter-spacing: 2px; text-align: center;}
         .modal-subtitle { font-size: 0.85rem; font-weight: bold; color: #1c7ed6; text-transform: uppercase; letter-spacing: 1.5px; margin-top: -8px; margin-bottom: 10px; text-align: center; }
 
-        /* Help Text Styling */
         h3 { color: #1c7ed6; border-bottom: 2px solid #eee; padding-bottom: 5px; margin-top: 20px; }
         p, ul { color: #444; line-height: 1.6; }
         ul { padding-left: 20px; }
         .legal-text { font-size: 0.85rem; color: #666; background: #f8f9fa; padding: 15px; border-radius: 6px; margin-top: 30px; border: 1px solid #dee2e6;}
         .legal-header { font-weight: bold; margin-bottom: 5px; color: #333; }
-
         .dot { display:inline-block; width:11px; height:11px; border-radius:50%; margin-right:4px; vertical-align:middle; }
 
         input[type="text"], input[type="number"] {
-            padding: 10px;
+            padding: 8px 10px;
             border: 2px solid #ddd;
             border-radius: 6px;
-            font-size: 1rem;
+            font-size: 0.95rem;
             width: 100%;
             box-sizing: border-box;
             text-align: center;
         }
 
-        input[type="text"]:disabled {
-            background-color: #e9ecef;
-            color: #666;
-            cursor: not-allowed;
-        }
+        input[type="text"]:disabled { background-color: #e9ecef; color: #666; cursor: not-allowed; }
         
         select {
-            padding: 10px;
+            padding: 8px 10px;
             border: 2px solid #ddd;
             border-radius: 6px;
-            font-size: 1rem;
+            font-size: 0.95rem;
             width: 100%;
             box-sizing: border-box;
             background: white;
         }
 
-        .p1-label { color: var(--p1-color); font-weight: bold; text-align: left; margin-bottom: -2px; font-size: 0.9rem; }
-        .p2-label { color: var(--p2-color); font-weight: bold; text-align: left; margin-bottom: -2px; font-size: 0.9rem; }
-        .p3-label { color: var(--p3-color); font-weight: bold; text-align: left; margin-bottom: -2px; font-size: 0.9rem; }
-        .label-text { font-weight: bold; text-align: left; margin-bottom: -10px; font-size: 0.9rem; color: #555; }
+        .p1-label { color: var(--p1-color); font-weight: bold; text-align: left; font-size: 0.85rem; }
+        .p2-label { color: var(--p2-color); font-weight: bold; text-align: left; font-size: 0.85rem; }
+        .p3-label { color: var(--p3-color); font-weight: bold; text-align: left; font-size: 0.85rem; }
+        .label-text { font-weight: bold; text-align: left; font-size: 0.85rem; color: #555; }
 
         #round-score-detail { font-size: 1.5rem; font-weight: bold; color: #333; margin: 10px 0; }
         #total-score-detail { font-size: 0.9rem; color: #666; }
 
-        /* Random choice overlay positioned over board area */
         #first-picker {
             position: absolute;
             top: 0; left: 0; right: 0; bottom: 0;
@@ -387,60 +375,151 @@
             transition: opacity 0.08s, transform 0.08s, box-shadow 0.08s;
         }
 
-        .picker-chip.active {
-            opacity: 1;
-            transform: scale(1.12);
-            box-shadow: 0 0 16px rgba(0,0,0,0.45);
-        }
-
+        .picker-chip.active { opacity: 1; transform: scale(1.12); box-shadow: 0 0 16px rgba(0,0,0,0.45); }
         .picker-chip.winner { animation: pulse 0.5s infinite; }
-
         #picker-result { font-size: 1.05rem; font-weight: bold; color: #555; min-height: 1.4em; }
 
-    
-.card.back{background:repeating-linear-gradient(45deg,#d0d7f5,#d0d7f5 6px,#eef1ff 6px,#eef1ff 12px);border-top:6px solid #868e96;cursor:default}
-.card.back:hover{transform:none}
-#chat{position:fixed;right:12px;bottom:12px;z-index:3000;display:none;flex-direction:column;align-items:flex-end;gap:6px}
-#chat-box{display:none;flex-direction:column;gap:6px;width:290px;background:#fff;border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.28);padding:8px;box-sizing:border-box}
-#chat-log{height:170px;overflow-y:auto;font-size:.85rem;line-height:1.4;color:#333;word-break:break-word;border-bottom:1px solid #eee;padding-bottom:4px}
-#chat-in{display:flex;gap:6px}#chat-in input{text-align:left;padding:7px}
-#voice-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}#voice-msg{font-size:.75rem;color:#c92a2a}
-.seat-row{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:1rem}
-</style>
+        /* Floating Chat Panel */
+        #chat-toggle-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+            background: #228be6;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            padding: 10px 18px;
+            font-size: 0.95rem;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+            display: none; /* Only shown in Online Room mode */
+            align-items: center;
+            gap: 8px;
+            transition: transform 0.2s, background 0.2s;
+        }
+        #chat-toggle-btn:hover { background: #1c7ed6; transform: scale(1.05); }
+        
+        #chat-badge {
+            background: #fa5252;
+            color: white;
+            border-radius: 10px;
+            padding: 2px 7px;
+            font-size: 0.75rem;
+            display: none;
+        }
+
+        #chat-window {
+            position: fixed;
+            bottom: 75px;
+            right: 20px;
+            width: 310px;
+            height: 380px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border: 1px solid #dee2e6;
+        }
+        #chat-window.hidden { display: none; }
+
+        .chat-header {
+            background: #343a40;
+            color: white;
+            padding: 10px 15px;
+            font-weight: bold;
+            font-size: 0.95rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .chat-close-btn { background: transparent; border: none; color: #adb5bd; font-size: 1.2rem; cursor: pointer; }
+        .chat-close-btn:hover { color: white; }
+
+        #chat-messages {
+            flex: 1;
+            padding: 10px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            background: #f8f9fa;
+            font-size: 0.88rem;
+        }
+        .chat-msg { line-height: 1.35; word-break: break-word; text-align: left; }
+        .chat-msg .sender { font-weight: bold; margin-right: 4px; }
+        .chat-msg.system {
+            color: #6c757d;
+            font-style: italic;
+            font-size: 0.8rem;
+            text-align: center;
+            border-top: 1px dashed #dee2e6;
+            border-bottom: 1px dashed #dee2e6;
+            padding: 3px 0;
+        }
+
+        .chat-input-area {
+            display: flex;
+            padding: 8px;
+            gap: 6px;
+            background: white;
+            border-top: 1px solid #dee2e6;
+        }
+        .chat-input-area input { flex: 1; text-align: left; padding: 8px; font-size: 0.88rem; }
+        .chat-input-area button { padding: 8px 14px; background: #228be6; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
+        .chat-input-area button:hover { background: #1c7ed6; }
+
+    </style>
 </head>
 <body>
 
-    <div id="start-modal" class="modal-overlay" style="display:flex;">
+    <!-- 1. MAIN MENU MODAL -->
+    <div id="main-menu-modal" class="modal-overlay" style="display:flex;">
         <div class="modal-box">
             <div class="modal-title">FLIPSLIDE</div>
             <div class="modal-subtitle">The Art of Isometric Interference</div>
 
-            <!-- 1. Board -->
-            <div class="label-text">Board</div>
-            <select id="board-type" onchange="onBoardChange()">
+            <div class="menu-btn-list">
+                <button class="menu-main-btn" style="background:#228be6;" onclick="openLocalSetup()">🎮 Pass & Play (Local)</button>
+                <button class="menu-main-btn" style="background:#12b886;" onclick="openHostSetup()">🌐 Host Online Room</button>
+                <button class="menu-main-btn" style="background:#7950f2;" onclick="openJoinModal()">🔗 Join Online Room</button>
+                <button class="menu-main-btn" style="background:#868e96;" onclick="openHelp()">📖 How to Play</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. LOCAL PASS & PLAY SETUP MODAL -->
+    <div id="local-setup-modal" class="modal-overlay">
+        <div class="modal-box">
+            <div class="modal-title">PASS & PLAY</div>
+            <div class="modal-subtitle">Single Device Match Setup</div>
+
+            <div class="label-text">Board Type</div>
+            <select id="local-board-type" onchange="onBoardChange('local')">
                 <option value="square">Square Grid (2 players, 90° turns)</option>
                 <option value="hex">Hexagonal Grid (2–3 players, 60° turns)</option>
             </select>
 
-            <!-- 2. Game Pieces -->
             <div class="label-text">Game Pieces per Player</div>
-            <select id="num-pieces">
+            <select id="local-num-pieces">
                 <option value="1">1 piece</option>
                 <option value="2">2 pieces</option>
                 <option value="3">3 pieces</option>
                 <option value="4">4 pieces</option>
             </select>
 
-            <!-- 3. Number of Players (Only shown for Hexagonal Board) -->
-            <div id="players-row" class="setup-row" style="display:none;">
+            <div id="local-players-row" class="setup-row" style="display:none;">
                 <div class="label-text">Number of Players</div>
-                <select id="num-players" onchange="updatePlayerSetupUI()">
+                <select id="local-num-players" onchange="updatePlayerSetupUI('local')">
                     <option value="2">2 Players</option>
                     <option value="3" selected>3 Players</option>
                 </select>
             </div>
 
-            <!-- 4. Players Setup (Type then Name) -->
             <div class="setup-group">
                 <div class="p1-label">Blue Player</div>
                 <div class="player-config-row">
@@ -474,144 +553,155 @@
                 </div>
             </div>
 
-            <!-- 5. Winning Condition -->
             <div class="label-text">Winning Condition</div>
-            <select id="match-goal-type" onchange="onGoalTypeChange()">
+            <select id="local-goal-type" onchange="onGoalTypeChange('local')">
                 <option value="target" selected>Target Score</option>
                 <option value="single">Single Round</option>
                 <option value="unlimited">Unlimited Play</option>
             </select>
 
-            <div id="target-score-wrapper" class="setup-row" style="margin-top: -5px;">
+            <div id="local-target-score-wrapper" class="setup-row">
                 <div class="label-text">Target Points</div>
-                <input type="number" id="target-score-input" value="50" min="5" max="500" step="5">
+                <input type="number" id="local-target-score-input" value="50" min="5" max="500" step="5">
             </div>
 
-            <button class="btn" style="background: #228be6; margin-top:10px;" onclick="startGame()">START MATCH</button>
-
-            <div id="online-box" style="display:none;flex-direction:column;gap:8px;border-top:2px solid #eee;padding-top:12px;">
-                <div class="label-text">Online play</div>
-                <button class="btn" id="create-room-btn" style="background:#2f9e44;" onclick="createRoom()">CREATE ONLINE ROOM</button>
-                <div id="host-hint" style="display:none;font-size:.8rem;color:#777;">Hosting unavailable.</div>
-                <div class="label-text" style="margin-top:6px;">&hellip;or join a friend's game</div>
-                <div class="player-config-row">
-                    <input type="text" id="join-code" placeholder="Room code" maxlength="5" style="text-transform:uppercase;">
-                    <input type="text" id="join-name" placeholder="Your name" maxlength="20">
-                </div>
-                <button class="btn" onclick="joinRoom()">JOIN ROOM</button>
-                <div id="online-msg" style="color:#c92a2a;font-size:.85rem;"></div>
-            </div>
-
+            <button class="btn" style="background:#228be6; margin-top:6px;" onclick="startLocalGame()">START MATCH</button>
+            <button class="btn" style="background:#868e96;" onclick="openMenu()">Back to Menu</button>
         </div>
     </div>
 
+    <!-- 3. HOST ONLINE ROOM SETUP MODAL -->
+    <div id="host-setup-modal" class="modal-overlay">
+        <div class="modal-box">
+            <div class="modal-title">HOST ROOM</div>
+            <div class="modal-subtitle">Create an Online Room</div>
+
+            <div class="label-text">Your Name (Host)</div>
+            <input type="text" id="host-player-name" value="Host Player" placeholder="Enter name">
+
+            <div class="label-text">Board Type</div>
+            <select id="host-board-type" onchange="onBoardChange('host')">
+                <option value="square">Square Grid (2 players, 90° turns)</option>
+                <option value="hex">Hexagonal Grid (2–3 players, 60° turns)</option>
+            </select>
+
+            <div class="label-text">Game Pieces per Player</div>
+            <select id="host-num-pieces">
+                <option value="1">1 piece</option>
+                <option value="2">2 pieces</option>
+                <option value="3">3 pieces</option>
+                <option value="4">4 pieces</option>
+            </select>
+
+            <div id="host-players-row" class="setup-row" style="display:none;">
+                <div class="label-text">Number of Players</div>
+                <select id="host-num-players" onchange="updatePlayerSetupUI('host')">
+                    <option value="2">2 Players</option>
+                    <option value="3" selected>3 Players</option>
+                </select>
+            </div>
+
+            <div class="label-text">Winning Condition</div>
+            <select id="host-goal-type" onchange="onGoalTypeChange('host')">
+                <option value="target" selected>Target Score</option>
+                <option value="single">Single Round</option>
+                <option value="unlimited">Unlimited Play</option>
+            </select>
+
+            <div id="host-target-score-wrapper" class="setup-row">
+                <div class="label-text">Target Points</div>
+                <input type="number" id="host-target-score-input" value="50" min="5" max="500" step="5">
+            </div>
+
+            <button type="button" id="create-room-btn" class="btn" style="background: #12b886; margin-top:6px;" onclick="initHostRoom()">CREATE ROOM</button>
+
+            <!-- LOBBY DISPLAY ONCE ROOM IS CREATED -->
+            <div id="host-lobby-panel" style="display:none; flex-direction:column; gap:10px; border-top:1px dashed #ccc; padding-top:10px;">
+                <div id="room-code-display-box" style="background:#e7f5ff; border:1px solid #74c0fc; padding:10px; border-radius:8px;">
+                    <div style="font-size:0.75rem; color:#1c7ed6; font-weight:bold;">ROOM CODE</div>
+                    <div id="room-code-text" style="font-size:1.5rem; font-weight:bold; letter-spacing:3px; color:#1864ab;">- - - - -</div>
+                    <button type="button" class="btn" style="padding:6px; font-size:0.8rem; margin-top:6px; width:100%;" onclick="copyInviteLink()">📋 Copy Invite Link</button>
+                </div>
+
+                <div class="label-text">Player Slots</div>
+                <div id="lobby-slots-list" style="display:flex; flex-direction:column; gap:6px;"></div>
+                <button type="button" class="btn" style="background:#40c057; margin-top:6px;" onclick="startOnlineGame()">START ONLINE MATCH</button>
+            </div>
+
+            <button class="btn" style="background:#868e96;" onclick="openMenu()">Back to Menu</button>
+        </div>
+    </div>
+
+    <!-- 4. JOIN ONLINE ROOM MODAL -->
+    <div id="join-modal" class="modal-overlay">
+        <div class="modal-box">
+            <div class="modal-title">JOIN ROOM</div>
+            <div class="modal-subtitle">Enter Room Code To Play</div>
+
+            <div class="label-text">Room Code</div>
+            <input type="text" id="join-code-input" placeholder="e.g. 8F2A9" style="text-transform:uppercase; letter-spacing:2px; font-weight:bold;">
+
+            <div class="label-text">Your Name</div>
+            <input type="text" id="join-player-name" value="Guest Player" placeholder="Enter name">
+
+            <button type="button" id="join-room-btn" class="btn" style="background:#7950f2; margin-top:6px;" onclick="joinOnlineRoom()">JOIN ROOM</button>
+            <div id="join-status-text" style="font-size:0.85rem; color:#666; min-height:1.2em;"></div>
+
+            <button class="btn" style="background:#868e96;" onclick="openMenu()">Back to Menu</button>
+        </div>
+    </div>
+
+    <!-- HELP MODAL -->
     <div id="help-modal" class="modal-overlay">
         <div class="modal-box large">
             <div class="modal-title">How to Play</div>
             <div class="modal-subtitle">FlipSlide: The Art of Isometric Interference</div>
             <div class="scroll-area">
 
-                <!-- ============ SQUARE BOARD RULES ============ -->
                 <div id="help-square">
                     <h3>Objective</h3>
-                    <p>Pieces stand on the points where the gridlines cross. Each player starts with all of their pieces stacked on their starting corner and must move <strong>every</strong> piece to the diagonal opposite corner. The first player to get all of their pieces onto their target point wins the round.</p>
+                    <p>Pieces stand on gridline intersections. Move <strong>every</strong> piece to the opposite corner. First player to reach their target point with all pieces wins the round.</p>
                     <ul>
-                        <li><span class="dot" style="background:#1155cc"></span><strong>Blue:</strong> bottom-left corner &rarr; top-right corner.</li>
-                        <li><span class="dot" style="background:#cc0000"></span><strong>Red:</strong> bottom-right corner &rarr; top-left corner.</li>
+                        <li><span class="dot" style="background:#1155cc"></span><strong>Blue:</strong> bottom-left &rarr; top-right.</li>
+                        <li><span class="dot" style="background:#cc0000"></span><strong>Red:</strong> bottom-right &rarr; top-left.</li>
                     </ul>
                     
-                    <h3>Scoring</h3>
-                    <ul>
-                        <li><strong>Round Winner:</strong> Scores points based on how far the loser's pieces are from their target.</li>
-                        <li><strong>Calculation:</strong> Points = for each of the loser's pieces, (distance X + distance Y), added together. This is the "City Block" distance.</li>
-                    </ul>
-
                     <h3>Movement Cards</h3>
-                    <p>Each piece has two arrows. Blue lines run up and down, red lines run left and right. A card always works along the line of its own colour.</p>
                     <ul>
-                        <li><strong>SLIDE:</strong> Translate a piece 1 to 5 steps along a line of the card's colour, in the direction its arrow on that line is pointing. Blue cards slide up or down; red cards slide left or right.</li>
-                        <li><strong>TURN:</strong> Rotate a piece 90° clockwise or anti-clockwise about its own centre.</li>
-                        <li><strong>FLIP:</strong> Reflect a piece in the line of the card's colour that passes through it. The piece stays on its point but its arrows become a mirror image. Blue cards flip it in the vertical line, red cards in the horizontal line.</li>
-                        <li><strong>FLIP & SLIDE:</strong> A glide reflection. Reflect the piece in the line of the card's colour, then slide it 1 to 5 steps along that same line in the direction of its arrow.</li>
+                        <li><strong>SLIDE:</strong> Translate a piece 1 to 5 steps along a line of card's color.</li>
+                        <li><strong>TURN:</strong> Rotate a piece 90° clockwise or anti-clockwise.</li>
+                        <li><strong>FLIP:</strong> Reflect a piece in the line of the card's color.</li>
+                        <li><strong>FLIP & SLIDE:</strong> Reflect the piece, then slide it 1 to 5 steps.</li>
                     </ul>
 
                     <h3>Rules</h3>
                     <ul>
-                        <li><strong>Choosing a piece:</strong> If you have more than one piece, click one of your pieces to choose it (click it again to cycle through pieces stacked on the same point), then pick a card. The chosen piece pulsates smoothly on its turn.</li>
-                        <li><strong>Stacking:</strong> Your own pieces may share or overlap the same points.</li>
-                        <li><strong>Collision:</strong> If a piece lands on another player's piece, even just partially overlapping it, that piece is sent back to its start.</li>
-                        <li><strong>Safe Zones:</strong> There are five grey safe zones: the centre and four surrounding zones. A piece standing on the centre of a grey zone cannot be sent back, and you cannot land on or overlap it. A piece that has reached its target is also safe.</li>
-                        <li><strong>Arriving:</strong> A piece that lands exactly on its target point stays there for good.</li>
-                        <li><strong>Who starts:</strong> The player to go first is chosen at random at the start of each round.</li>
-                        <li><strong>Confirming Moves:</strong> Click a card to preview. Click the card again (or the preview piece on the board) to confirm.</li>
-                        <li><strong>Stuck?</strong> Use the "Replace All" button to skip your turn and get a new hand.</li>
+                        <li><strong>Selecting Pieces:</strong> Click any of your pieces on the board to select it.</li>
+                        <li><strong>Collision:</strong> Landing on an opponent sends their piece back to start.</li>
+                        <li><strong>Safe Zones:</strong> Grey zones protect pieces from collision.</li>
                     </ul>
                 </div>
 
-                <!-- ============ HEXAGONAL BOARD RULES ============ -->
                 <div id="help-hex" style="display:none;">
                     <h3>Objective</h3>
-                    <p>Pieces stand on the points where the coloured lines cross. Each player starts with all of their pieces stacked on their starting corner and must move <strong>every</strong> piece to the opposite corner. The first player to get all of their pieces onto their target point wins the round. Each player's two corners are shaded in their colour and are joined by a line of that colour.</p>
+                    <p>Pieces stand on hexagonal grid points. Move all pieces to the opposite corner to win.</p>
                     <ul>
-                        <li><span class="dot" style="background:#0000ff"></span><strong>Blue:</strong> bottom-right corner &rarr; top-left corner.</li>
-                        <li><span class="dot" style="background:#ff0000"></span><strong>Red:</strong> bottom-left corner &rarr; top-right corner.</li>
-                        <li><span class="dot" style="background:#009900"></span><strong>Green</strong> (3-player games): top corner &rarr; bottom corner.</li>
-                    </ul>
-
-                    <h3>Scoring</h3>
-                    <ul>
-                        <li><strong>Round Winner:</strong> Scores points for each opponent, based on how far that opponent's pieces are from their target.</li>
-                        <li><strong>Calculation:</strong> Points = for each of the opponent's pieces, the number of steps along the lines to its target, added together.</li>
-                    </ul>
-
-                    <h3>The Three Directions</h3>
-                    <p>The lines come in three colours, and every card has one of those colours. Each piece has <strong>three arrows</strong>, one lying along each colour of line. A card always works along the line of its own colour, using the arrow that lies on that line:</p>
-                    <ul>
-                        <li><span class="dot" style="background:#0000ff"></span><strong>Blue</strong> lines run top-left &harr; bottom-right.</li>
-                        <li><span class="dot" style="background:#009900"></span><strong>Green</strong> lines run straight up &harr; down.</li>
-                        <li><span class="dot" style="background:#ff0000"></span><strong>Red</strong> lines run bottom-left &harr; top-right.</li>
-                    </ul>
-                    <p>The arrows turn with the piece, so turning changes which way each colour of card moves it.</p>
-
-                    <h3>Movement Cards</h3>
-                    <ul>
-                        <li><strong>SLIDE:</strong> Translate a piece 1 to 5 steps along the line of that colour, in the direction its arrow on that line is pointing.</li>
-                        <li><strong>TURN:</strong> Rotate a piece 60° or 120°, clockwise or anti-clockwise, about its own centre.</li>
-                        <li><strong>FLIP:</strong> Reflect a piece in the line of that colour that passes through it. The piece stays on its point but is turned over, so its arrows become a mirror image.</li>
-                        <li><strong>FLIP & SLIDE:</strong> A glide reflection. Reflect the piece in the line of that colour, then slide it 1 to 5 steps along that same line in the direction of its arrow.</li>
-                    </ul>
-
-                    <h3>Rules</h3>
-                    <ul>
-                        <li><strong>Choosing a piece:</strong> If you have more than one piece, click one of your pieces to choose it (click it again to cycle through pieces stacked on the same point), then pick a card. The chosen piece pulsates smoothly on its turn.</li>
-                        <li><strong>Stacking:</strong> Your own pieces may share or overlap the same points.</li>
-                        <li><strong>Collision:</strong> If a piece lands on another player's piece, even just partially overlapping it, that piece is sent back to its start.</li>
-                        <li><strong>Safe Zones:</strong> There are seven grey safe zones: the centre and six more positioned around it. A piece standing on the centre of a grey zone cannot be sent back, and you cannot land on or overlap it. A piece that has reached its target is also safe.</li>
-                        <li><strong>Arriving:</strong> A piece that lands exactly on its target point stays there for good.</li>
-                        <li><strong>Who starts:</strong> The player to go first is chosen at random at the start of each round.</li>
-                        <li><strong>Confirming Moves:</strong> Click a card to preview. Click the card again (or the preview piece on the board) to confirm.</li>
-                        <li><strong>Stuck?</strong> Use the "Replace All" button to skip your turn and get a new hand.</li>
+                        <li><span class="dot" style="background:#0000ff"></span><strong>Blue:</strong> bottom-right &rarr; top-left.</li>
+                        <li><span class="dot" style="background:#ff0000"></span><strong>Red:</strong> bottom-left &rarr; top-right.</li>
+                        <li><span class="dot" style="background:#009900"></span><strong>Green:</strong> top &rarr; bottom.</li>
                     </ul>
                 </div>
 
                 <div class="legal-text">
                     <div class="legal-header">Game Terms of Use</div>
-                    <p><strong>Ownership and Copyright:</strong> This game, including all code, assets, artwork, and sound, is the intellectual property of Ute Poelman. All rights are reserved.</p>
-                    <p><strong>License to Use:</strong> Subject to these terms, the author grants you a personal, non-exclusive, non-transferable license to access and play the game for your own private, non-commercial entertainment. <strong>Educational use is explicitly permitted:</strong> Teachers, schools, and educational institutions may use this game in classroom settings and share it with students for teaching purposes at no cost.</p>
-                    <p><strong>Restrictions:</strong> You are strictly prohibited from:</p>
-                    <ul>
-                        <li>Modifying the source code, assets, or logic of this game</li>
-                        <li>Redistributing or "mirroring" the game files on other websites without express written permission</li>
-                        <li>Selling or commercialising the game or any derivative works based upon it</li>
-                        <li>Removing any copyright notices or branding from the source code or game interface</li>
-                    </ul>
-                    <p><strong>Disclaimer:</strong> The game is provided "as is," without warranty of any kind. The author is not liable for any damages arising from the use of this software.</p>
+                    <p><strong>Ownership and Copyright:</strong> Intellectual property of Ute Poelman. All rights reserved.</p>
                 </div>
             </div>
             <button class="btn" onclick="document.getElementById('help-modal').style.display='none'">Close</button>
         </div>
     </div>
 
+    <!-- END ROUND MODAL -->
     <div id="end-modal" class="modal-overlay">
         <div class="modal-box">
             <div class="modal-title" id="winner-text">BLUE WINS!</div>
@@ -627,28 +717,7 @@
         </div>
     </div>
 
-    
-    <div id="lobby-modal" class="modal-overlay">
-        <div class="modal-box">
-            <div class="modal-title">GAME ROOM</div>
-            <div class="modal-subtitle">Share this code with your friends</div>
-            <div id="lobby-code" style="font-size:2.4rem;font-weight:bold;letter-spacing:8px;color:#1c7ed6;"></div>
-            <button class="btn" id="copy-invite">Copy invite link</button>
-            <div id="lobby-seats" style="text-align:left;"></div>
-            <div id="lobby-msg" style="color:#666;font-size:.85rem;word-break:break-all;"></div>
-            <button class="btn" id="lobby-start" style="background:#228be6;">START MATCH</button>
-            <button class="btn" style="background:#868e96;" onclick="leaveRoom()">LEAVE ROOM</button>
-        </div>
-    </div>
-    <div id="chat">
-        <div id="chat-box">
-            <div id="chat-log"></div>
-            <div id="chat-in"><input type="text" id="chat-text" maxlength="300" placeholder="Message&hellip;"><button class="btn" id="chat-send">Send</button></div>
-            <div id="voice-row"><button class="btn" id="voice-btn" style="background:#2f9e44;">&#127908; Join voice</button><button class="btn" id="mute-btn" style="display:none;">Mute</button><span id="voice-msg"></span></div>
-        </div>
-        <button class="btn" id="chat-tog" style="background:#228be6;">&#128172; Chat<span id="chat-badge"></span></button>
-    </div>
-
+    <!-- TOP BAR -->
     <div id="top-bar">
         <h1>FLIPSLIDE</h1>
         
@@ -656,6 +725,9 @@
             <span class="score-val blue" id="sb-blue">Blue: 0</span> &nbsp;|&nbsp; 
             <span class="score-val red" id="sb-red">Red: 0</span>
             <span id="sb-green-wrap" style="display:none;">&nbsp;|&nbsp; <span class="score-val green" id="sb-green">Green: 0</span></span>
+            <span id="room-info-badge" style="display:none; font-size:0.8rem; background:#e7f5ff; color:#1c7ed6; border:1px solid #74c0fc; padding:2px 8px; border-radius:10px;">
+                Room: <strong id="top-room-code">-</strong>
+            </span>
         </div>
 
         <div style="display: flex; gap: 10px;">
@@ -664,11 +736,13 @@
         </div>
     </div>
 
+    <!-- STREAMLINED GAME LAYOUT -->
     <div id="game-layout">
-        <div class="player-panel" id="panel-blue" style="border-left: 5px solid var(--p1-color);">
-            <div class="panel-title" id="p1-panel-name" style="color: var(--p1-color);">Blue</div>
-            <div class="panel-sub" id="p1-progress"></div>
-            <div id="hand-blue" class="hand-container"></div>
+        <!-- Single Left Player Panel -->
+        <div class="player-panel" id="main-player-panel">
+            <div class="panel-title" id="main-panel-name">Hand</div>
+            <div class="panel-sub" id="main-panel-progress"></div>
+            <div id="main-hand-container" class="hand-container"></div>
         </div>
 
         <div id="board-area">
@@ -686,26 +760,31 @@
                 </div>
             </div>
         </div>
+    </div>
 
-        <div class="player-panel" id="panel-red" style="border-right: 5px solid var(--p2-color);">
-            <div class="panel-title" id="p2-panel-name" style="color: var(--p2-color);">Red</div>
-            <div class="panel-sub" id="p2-progress"></div>
-            <div id="hand-red" class="hand-container"></div>
+    <!-- FLOATING IN-GAME CHAT -->
+    <button id="chat-toggle-btn" onclick="toggleChat()">
+        💬 Chat <span id="chat-badge">0</span>
+    </button>
+
+    <div id="chat-window" class="hidden">
+        <div class="chat-header">
+            <span>Room Chat</span>
+            <button class="chat-close-btn" onclick="toggleChat()">&times;</button>
         </div>
-
-        <div class="player-panel" id="panel-green" style="border-right: 5px solid var(--p3-color); display:none;">
-            <div class="panel-title" id="p3-panel-name" style="color: var(--p3-color);">Green</div>
-            <div class="panel-sub" id="p3-progress"></div>
-            <div id="hand-green" class="hand-container"></div>
+        <div id="chat-messages">
+            <div class="chat-msg system">Welcome to FlipSlide Chat!</div>
+        </div>
+        <div class="chat-input-area">
+            <input type="text" id="chat-input" placeholder="Type a message..." onkeydown="if(event.key==='Enter') sendChatMessage()">
+            <button onclick="sendChatMessage()">Send</button>
         </div>
     </div>
 
 <script>
 /**
- * FLIPSLIDE ENGINE
+ * FLIPSLIDE ENGINE - Local Pass & Play & P2P Multiplayer
  */
-
-// --- Config ---
 
 const SQ_CELLS = 20;
 const SQ_MIN = 1;
@@ -743,18 +822,8 @@ const HEX_SAFE_POINTS = [
 ];
 
 const BOT_NAMES = [
-    "Reflecto-Bot",
-    "Vector-Vectra",
-    "Iso-Bot",
-    "Glide-Master",
-    "Symmetry-Bot",
-    "Rotato-Tron",
-    "FlipSlide-AI",
-    "Tessellator",
-    "Matrix-Mind",
-    "Isometrix-3000",
-    "Poly-Pivot",
-    "Axis-Ace"
+    "Reflecto-Bot", "Vector-Vectra", "Iso-Bot", "Glide-Master",
+    "Symmetry-Bot", "Rotato-Tron", "FlipSlide-AI", "Tessellator"
 ];
 
 const mod6 = n => ((n % 6) + 6) % 6;
@@ -785,13 +854,73 @@ let gameState = {
     token: 0
 };
 
+// Network State
+let netState = {
+    setupMode: 'local', // 'local' | 'online'
+    isHost: false,
+    myPlayerIdx: null,
+    roomCode: '',
+    peer: null,
+    conns: [],
+    hostConn: null,
+    lobbySlots: [
+        { type: 'human', name: 'Host Player', connected: true },
+        { type: 'ai', name: 'Bot 1', connected: false },
+        { type: 'ai', name: 'Bot 2', connected: false }
+    ]
+};
+
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
+
+// --- Screen Navigation ---
+
+function hideAllModals() {
+    document.querySelectorAll('.modal-overlay').forEach(m => m.style.display = 'none');
+}
+
+function openMenu() {
+    hideAllModals();
+    document.getElementById('main-menu-modal').style.display = 'flex';
+}
+
+function openLocalSetup() {
+    hideAllModals();
+    onBoardChange('local');
+    onGoalTypeChange('local');
+    document.getElementById('local-setup-modal').style.display = 'flex';
+}
+
+function openHostSetup() {
+    hideAllModals();
+    onBoardChange('host');
+    onGoalTypeChange('host');
+    document.getElementById('host-setup-modal').style.display = 'flex';
+}
+
+function openJoinModal() {
+    hideAllModals();
+    document.getElementById('join-modal').style.display = 'flex';
+}
+
+function showStartScreen() {
+    gameState.token++;
+    gameState.picking = false;
+    document.getElementById('first-picker').style.display = 'none';
+    openMenu();
+}
+
+function openHelp() {
+    const hex = isHex();
+    document.getElementById('help-square').style.display = hex ? 'none' : 'block';
+    document.getElementById('help-hex').style.display = hex ? 'block' : 'none';
+    document.getElementById('help-modal').style.display = 'flex';
+}
 
 // --- Board setup ---
 
 function setupBoard(type, n) {
-    const avail = Math.max(420, window.innerHeight - 210);
+    const avail = Math.max(420, window.innerHeight - 200);
 
     if (type === 'hex') {
         const C = HEX_CORNER_DIST;
@@ -805,7 +934,7 @@ function setupBoard(type, n) {
         };
 
         const steps = 2 * (HEX_RADIUS + 1);
-        const a = Math.max(10, Math.min(32, avail / steps));
+        const a = Math.max(10, Math.min(34, avail / steps));
         const pad = 8;
         canvas.width  = Math.ceil(steps * a * Math.sqrt(3) / 2 + 2 * pad);
         canvas.height = Math.ceil(steps * a + 2 * pad);
@@ -821,7 +950,7 @@ function setupBoard(type, n) {
             ]
         };
 
-        const T = Math.max(16, Math.min(34, Math.floor(avail / (SQ_CELLS + 0.4))));
+        const T = Math.max(16, Math.min(36, Math.floor(avail / (SQ_CELLS + 0.4))));
         const pad = 10;
         canvas.width = canvas.height = SQ_CELLS * T + 2 * pad;
         SQ = { T: T, pad: pad };
@@ -856,57 +985,40 @@ function newPiece(i) {
     return           { color: 'red',  x: st.x, y: st.y, mirrored: false, finished: false, v1: {x:-1, y:0}, v2: {x:0, y:-1} };
 }
 
-// --- Setup & Menus ---
-
-function onBoardChange() {
-    const isHexGrid = document.getElementById('board-type').value === 'hex';
-    const playersRow = document.getElementById('players-row');
-    
-    if (isHexGrid) {
-        playersRow.style.display = 'flex';
-        document.getElementById('num-players').value = '3';
-    } else {
-        playersRow.style.display = 'none';
-        document.getElementById('num-players').value = '2';
+function onBoardChange(prefix) {
+    const isHexGrid = document.getElementById(`${prefix}-board-type`).value === 'hex';
+    const playersRow = document.getElementById(`${prefix}-players-row`);
+    if (playersRow) {
+        playersRow.style.display = isHexGrid ? 'flex' : 'none';
+        document.getElementById(`${prefix}-num-players`).value = isHexGrid ? '3' : '2';
     }
-    updatePlayerSetupUI();
+    updatePlayerSetupUI(prefix);
 }
 
-function selectedPlayerCount() {
-    const isHexGrid = document.getElementById('board-type').value === 'hex';
-    return isHexGrid ? parseInt(document.getElementById('num-players').value) : 2;
+function selectedPlayerCount(prefix) {
+    const isHexGrid = document.getElementById(`${prefix}-board-type`).value === 'hex';
+    return isHexGrid ? parseInt(document.getElementById(`${prefix}-num-players`).value) : 2;
 }
 
-function updatePlayerSetupUI() {
-    const n = selectedPlayerCount();
-    document.getElementById('p3-setup').style.display = (n === 3) ? 'flex' : 'none';
+function updatePlayerSetupUI(prefix) {
+    if (prefix === 'local') {
+        const n = selectedPlayerCount('local');
+        document.getElementById('p3-setup').style.display = (n === 3) ? 'flex' : 'none';
 
-    for (let i = 0; i < 3; i++) {
-        const typeSel = document.getElementById(`p${i + 1}-type`);
-        const nameInput = document.getElementById(`p${i + 1}-name`);
-        if (typeSel && nameInput && typeSel.value === 'ai') {
-            if (!nameInput.dataset.botName) {
-                nameInput.dataset.botName = getRandomBotName(i);
+        for (let i = 0; i < 3; i++) {
+            const typeSel = document.getElementById(`p${i + 1}-type`);
+            const nameInput = document.getElementById(`p${i + 1}-name`);
+            if (typeSel && nameInput && typeSel.value === 'ai') {
+                if (!nameInput.dataset.botName) nameInput.dataset.botName = getRandomBotName(i);
+                nameInput.value = nameInput.dataset.botName;
+                nameInput.disabled = true;
             }
-            nameInput.value = nameInput.dataset.botName;
-            nameInput.disabled = true;
         }
     }
 }
 
 function getRandomBotName(pIdx) {
-    const used = [];
-    for (let i = 0; i < 3; i++) {
-        if (i !== pIdx) {
-            const inp = document.getElementById(`p${i + 1}-name`);
-            if (inp && inp.dataset && inp.dataset.botName) {
-                used.push(inp.dataset.botName);
-            }
-        }
-    }
-    const avail = BOT_NAMES.filter(n => !used.includes(n));
-    if (avail.length === 0) return BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)];
-    return avail[Math.floor(Math.random() * avail.length)];
+    return BOT_NAMES[pIdx % BOT_NAMES.length];
 }
 
 function onPlayerTypeChange(pIdx) {
@@ -925,31 +1037,290 @@ function onPlayerTypeChange(pIdx) {
     }
 }
 
-function onGoalTypeChange() {
-    const type = document.getElementById('match-goal-type').value;
-    const wrapper = document.getElementById('target-score-wrapper');
-    wrapper.style.display = (type === 'target') ? 'flex' : 'none';
+function onGoalTypeChange(prefix) {
+    const type = document.getElementById(`${prefix}-goal-type`).value;
+    const wrapper = document.getElementById(`${prefix}-target-score-wrapper`);
+    if (wrapper) wrapper.style.display = (type === 'target') ? 'flex' : 'none';
 }
 
-function showStartScreen() {
-    gameState.token++;
-    gameState.picking = false;
-    document.getElementById('first-picker').style.display = 'none';
-    document.getElementById('end-modal').style.display = 'none';
-    document.getElementById('start-modal').style.display = 'flex';
+// --- Online Room Management (PeerJS) ---
+
+function initHostRoom() {
+    const btn = document.getElementById('create-room-btn');
+    btn.disabled = true;
+    btn.innerText = "Creating Room...";
+
+    const code = Math.random().toString(36).substring(2, 7).toUpperCase();
+    netState.roomCode = code;
+    netState.isHost = true;
+    netState.setupMode = 'online';
+    netState.myPlayerIdx = 0;
+
+    try {
+        netState.peer = new Peer('flipslide-' + code);
+    } catch(e) {
+        alert("PeerJS failed to initialize.");
+        btn.disabled = false;
+        btn.innerText = "CREATE ROOM";
+        return;
+    }
+
+    netState.peer.on('open', () => {
+        btn.style.display = 'none';
+        document.getElementById('room-code-text').innerText = code;
+        document.getElementById('host-lobby-panel').style.display = 'flex';
+        renderLobbySlots();
+        addChatMessage('System', '#6c757d', `Room ${code} created. Share link or code!`);
+    });
+
+    netState.peer.on('connection', (conn) => {
+        conn.on('data', (data) => {
+            if (data.type === 'JOIN_REQ') {
+                const availSlot = netState.lobbySlots.findIndex((s, idx) => idx > 0 && !s.connected);
+                if (availSlot === -1) {
+                    conn.send({ type: 'ERROR', msg: 'Room is full' });
+                    return;
+                }
+
+                netState.lobbySlots[availSlot] = {
+                    type: 'human',
+                    name: data.name || `Player ${availSlot + 1}`,
+                    connected: true
+                };
+
+                netState.conns.push({ conn: conn, pIdx: availSlot, name: data.name });
+
+                conn.send({
+                    type: 'WELCOME',
+                    myIdx: availSlot,
+                    playerName: data.name
+                });
+
+                renderLobbySlots();
+                addChatMessage('System', '#6c757d', `${data.name} joined the room!`);
+            } else {
+                handleHostNetMessage(conn, data);
+            }
+        });
+
+        conn.on('close', () => {
+            const idx = netState.conns.findIndex(c => c.conn === conn);
+            if (idx !== -1) {
+                const pIdx = netState.conns[idx].pIdx;
+                const pName = netState.lobbySlots[pIdx].name;
+                netState.conns.splice(idx, 1);
+                netState.lobbySlots[pIdx] = { type: 'ai', name: getRandomBotName(pIdx), connected: false };
+                renderLobbySlots();
+                addChatMessage('System', '#6c757d', `${pName} disconnected. Slot reset to Bot.`);
+            }
+        });
+    });
+
+    netState.peer.on('error', (err) => {
+        alert("Room creation error: " + err.message);
+        btn.disabled = false;
+        btn.innerText = "CREATE ROOM";
+    });
 }
 
-function openHelp() {
-    const hex = isHex();
-    document.getElementById('help-square').style.display = hex ? 'none' : 'block';
-    document.getElementById('help-hex').style.display = hex ? 'block' : 'none';
-    document.getElementById('help-modal').style.display = 'flex';
+function renderLobbySlots() {
+    const numP = selectedPlayerCount('host');
+    const container = document.getElementById('lobby-slots-list');
+    container.innerHTML = '';
+
+    for (let i = 0; i < numP; i++) {
+        const row = document.createElement('div');
+        row.className = 'player-config-row';
+        const labelColor = PLAYER_COLORS[i];
+        const pLabel = (i === 0) ? "Host (You)" : `Player ${i + 1}`;
+
+        let slotHtml = `<span style="font-weight:bold; color:${labelColor}; width:35%;">${pLabel}:</span>`;
+        if (i === 0) {
+            const hName = document.getElementById('host-player-name').value || "Host";
+            slotHtml += `<input type="text" value="${escapeHtml(hName)}" disabled style="flex:1;">`;
+        } else {
+            const slot = netState.lobbySlots[i] || { type: 'ai', name: 'Bot', connected: false };
+            if (slot.connected) {
+                slotHtml += `<input type="text" value="${escapeHtml(slot.name)} (Connected)" disabled style="flex:1; background:#e6fcf5; border-color:#20c997; color:#0ca678;">`;
+            } else {
+                slotHtml += `<select id="slot-type-${i}" onchange="onLobbySlotTypeChange(${i})" style="flex:1;">
+                                <option value="ai" ${slot.type === 'ai' ? 'selected' : ''}>Computer (AI)</option>
+                                <option value="waiting" ${slot.type === 'waiting' ? 'selected' : ''}>Waiting for Player...</option>
+                            </select>`;
+            }
+        }
+        row.innerHTML = slotHtml;
+        container.appendChild(row);
+    }
 }
 
-function startGame() {
-    const boardType = document.getElementById('board-type').value;
-    const n = selectedPlayerCount();
-    const goalType = document.getElementById('match-goal-type').value;
+function onLobbySlotTypeChange(i) {
+    const sel = document.getElementById(`slot-type-${i}`);
+    if (!sel) return;
+    netState.lobbySlots[i] = {
+        type: sel.value,
+        name: sel.value === 'ai' ? getRandomBotName(i) : `Player ${i + 1}`,
+        connected: false
+    };
+}
+
+function copyInviteLink() {
+    const url = window.location.origin + window.location.pathname + '?room=' + netState.roomCode;
+    navigator.clipboard.writeText(url).then(() => alert("Invite link copied to clipboard!"))
+    .catch(() => prompt("Copy this invite link:", url));
+}
+
+function joinOnlineRoom() {
+    const code = document.getElementById('join-code-input').value.trim().toUpperCase();
+    const name = document.getElementById('join-player-name').value.trim() || 'Guest';
+    const btn = document.getElementById('join-room-btn');
+    const statusText = document.getElementById('join-status-text');
+
+    if (!code) { alert("Please enter a room code."); return; }
+
+    btn.disabled = true;
+    btn.innerText = "CONNECTING...";
+    statusText.innerText = "Connecting to room host...";
+
+    netState.setupMode = 'online';
+    netState.isHost = false;
+    netState.roomCode = code;
+
+    try { netState.peer = new Peer(); }
+    catch(e) { alert("PeerJS initialization failed."); btn.disabled = false; return; }
+
+    netState.peer.on('open', () => {
+        const conn = netState.peer.connect('flipslide-' + code);
+        netState.hostConn = conn;
+
+        conn.on('open', () => {
+            statusText.innerText = "Connected! Sending join request...";
+            conn.send({ type: 'JOIN_REQ', name: name });
+        });
+
+        conn.on('data', (data) => handleGuestNetMessage(data));
+        conn.on('close', () => { statusText.innerText = "Host disconnected."; alert("Connection closed."); });
+    });
+
+    netState.peer.on('error', (err) => {
+        alert("Could not connect to room code: " + code);
+        btn.disabled = false;
+        btn.innerText = "JOIN ROOM";
+    });
+}
+
+// --- Sync & Net Logic ---
+
+function getSerializableState() {
+    return {
+        board: gameState.board,
+        numPlayers: gameState.numPlayers,
+        numPieces: gameState.numPieces,
+        playerNames: gameState.playerNames,
+        isAI: gameState.isAI,
+        pieces: gameState.pieces,
+        selByPlayer: gameState.selByPlayer,
+        scores: gameState.scores,
+        matchGoal: gameState.matchGoal,
+        currentPlayer: gameState.currentPlayer,
+        deck: gameState.deck,
+        hands: gameState.hands,
+        selectedCardIdx: gameState.selectedCardIdx,
+        pendingMove: gameState.pendingMove,
+        swapSelected: gameState.swapSelected,
+        gameOver: gameState.gameOver,
+        picking: gameState.picking,
+        token: gameState.token
+    };
+}
+
+function broadcastState(msgText) {
+    if (netState.setupMode !== 'online' || !netState.isHost) return;
+    const payload = {
+        type: 'SYNC_STATE',
+        gameState: getSerializableState(),
+        msg: msgText || null
+    };
+    netState.conns.forEach(c => {
+        if (c.conn && c.conn.open) c.conn.send(payload);
+    });
+}
+
+function handleHostNetMessage(conn, data) {
+    const slot = netState.conns.find(c => c.conn === conn);
+    if (!slot) return;
+    const senderIdx = slot.pIdx;
+
+    if (data.type === 'CHAT') {
+        addChatMessage(data.sender, data.color, data.text);
+        netState.conns.forEach(c => { if (c.conn && c.conn !== conn && c.conn.open) c.conn.send(data); });
+        return;
+    }
+
+    if (data.type === 'ACTION') {
+        if (gameState.currentPlayer !== senderIdx) return;
+        
+        if (data.action === 'SELECT_CARD') {
+            gameState.selectedCardIdx = data.cardIdx;
+            refreshPreview();
+            broadcastState();
+        } else if (data.action === 'CHOOSE_PIECE') {
+            choosePiece(data.pieceIdx);
+            broadcastState();
+        } else if (data.action === 'CONFIRM_MOVE') {
+            finishMove(data.moveState);
+            broadcastState();
+        } else if (data.action === 'SWAP') {
+            executeSwap();
+            broadcastState();
+        }
+    }
+}
+
+function handleGuestNetMessage(data) {
+    if (data.type === 'WELCOME') {
+        netState.myPlayerIdx = data.myIdx;
+        document.getElementById('join-status-text').innerText = `Connected as ${data.playerName}! Waiting for host to start...`;
+    } else if (data.type === 'START_GAME') {
+        netState.myPlayerIdx = data.myIdx;
+        gameState = data.gameState;
+        setupBoard(gameState.board, gameState.numPlayers);
+        
+        document.body.classList.toggle('hex-board', gameState.board === 'hex');
+        document.getElementById('room-info-badge').style.display = 'block';
+        document.getElementById('top-room-code').innerText = netState.roomCode;
+        document.getElementById('chat-toggle-btn').style.display = 'flex';
+
+        updateScoreBoard();
+        hideAllModals();
+        updateUI();
+        addChatMessage('System', '#6c757d', 'Match started!');
+    } else if (data.type === 'SYNC_STATE') {
+        gameState = data.gameState;
+        updateUI();
+        if (data.msg) addChatMessage('System', '#6c757d', data.msg);
+    } else if (data.type === 'CHAT') {
+        addChatMessage(data.sender, data.color, data.text);
+    }
+}
+
+function sendNetAction(actionObj) {
+    if (netState.setupMode === 'online' && !netState.isHost && netState.hostConn) {
+        netState.hostConn.send({ type: 'ACTION', ...actionObj });
+    }
+}
+
+// --- Start Match Logic ---
+
+function startLocalGame() {
+    netState.setupMode = 'local';
+    netState.myPlayerIdx = null;
+    document.getElementById('room-info-badge').style.display = 'none';
+    document.getElementById('chat-toggle-btn').style.display = 'none';
+
+    const boardType = document.getElementById('local-board-type').value;
+    const n = selectedPlayerCount('local');
+    const goalType = document.getElementById('local-goal-type').value;
 
     const names = [];
     const flags = [];
@@ -963,36 +1334,82 @@ function startGame() {
 
     gameState.board = boardType;
     gameState.numPlayers = n;
-    gameState.numPieces = parseInt(document.getElementById('num-pieces').value) || 1;
+    gameState.numPieces = parseInt(document.getElementById('local-num-pieces').value) || 1;
     gameState.playerNames = names;
     gameState.isAI = flags;
     gameState.scores = [0, 0, 0];
 
     if (goalType === 'single') gameState.matchGoal = 'single';
     else if (goalType === 'unlimited') gameState.matchGoal = 'unlimited';
-    else {
-        const val = parseInt(document.getElementById('target-score-input').value);
-        gameState.matchGoal = isNaN(val) || val <= 0 ? 50 : val;
-    }
+    else gameState.matchGoal = parseInt(document.getElementById('local-target-score-input').value) || 50;
 
     setupBoard(boardType, n);
-
-    document.getElementById('p1-panel-name').innerText = names[0];
-    document.getElementById('p2-panel-name').innerText = names[1];
-    document.getElementById('panel-green').style.display = (n === 3) ? 'flex' : 'none';
-    if (n === 3) document.getElementById('p3-panel-name').innerText = names[2];
-    document.body.classList.toggle('three-players', n === 3);
     document.body.classList.toggle('hex-board', boardType === 'hex');
 
     updateScoreBoard();
-
-    document.getElementById('start-modal').style.display = 'none';
+    hideAllModals();
     initRound();
+}
+
+function startOnlineGame() {
+    if (!netState.isHost) return;
+
+    const boardType = document.getElementById('host-board-type').value;
+    const n = selectedPlayerCount('host');
+    const goalType = document.getElementById('host-goal-type').value;
+
+    let matchGoal = 50;
+    if (goalType === 'single') matchGoal = 'single';
+    else if (goalType === 'unlimited') matchGoal = 'unlimited';
+    else matchGoal = parseInt(document.getElementById('host-target-score-input').value) || 50;
+
+    const names = [document.getElementById('host-player-name').value.trim() || "Host"];
+    const isAIFlags = [false];
+
+    for (let i = 1; i < n; i++) {
+        const slot = netState.lobbySlots[i] || { type: 'ai', name: 'Bot', connected: false };
+        names.push(slot.name);
+        isAIFlags.push(slot.type === 'ai');
+    }
+
+    gameState.board = boardType;
+    gameState.numPlayers = n;
+    gameState.numPieces = parseInt(document.getElementById('host-num-pieces').value) || 1;
+    gameState.playerNames = names;
+    gameState.isAI = isAIFlags;
+    gameState.scores = [0, 0, 0];
+    gameState.matchGoal = matchGoal;
+
+    setupBoard(boardType, n);
+    document.body.classList.toggle('hex-board', boardType === 'hex');
+
+    updateScoreBoard();
+    hideAllModals();
+
+    document.getElementById('room-info-badge').style.display = 'block';
+    document.getElementById('top-room-code').innerText = netState.roomCode;
+    document.getElementById('chat-toggle-btn').style.display = 'flex';
+
+    initRound();
+
+    const startPayload = {
+        type: 'START_GAME',
+        gameState: getSerializableState()
+    };
+
+    netState.conns.forEach(c => {
+        if (c.conn && c.conn.open) {
+            c.conn.send({ ...startPayload, myIdx: c.pIdx });
+        }
+    });
 }
 
 function startNextRound() {
     document.getElementById('end-modal').style.display = 'none';
     initRound();
+    if (netState.setupMode === 'online' && netState.isHost) {
+        broadcastState('Next round started!');
+    }
 }
 
 function initRound() {
@@ -1024,6 +1441,7 @@ function initRound() {
         gameState.currentPlayer = winner;
         ensureSelectedPiece(winner);
         updateUI();
+        if (netState.setupMode === 'online' && netState.isHost) broadcastState();
         scheduleAI();
     });
 }
@@ -1133,7 +1551,7 @@ function shuffle(array) {
     }
 }
 
-// --- Geometry Logic: square board ---
+// --- Geometry Transformations ---
 
 function rotVec(v, deg) {
     if (deg === 90) return { x: -v.y, y: v.x };
@@ -1184,8 +1602,6 @@ function applyTransformSquare(p, card) {
     return np;
 }
 
-// --- Geometry Logic: hexagonal board ---
-
 function findHexArrow(p, color) {
     const ax = HEX_AXIS[color];
     return p.hd.findIndex(d => d % 3 === ax);
@@ -1223,8 +1639,6 @@ function applyTransform(p, card) {
     return isHex() ? applyTransformHex(p, card) : applyTransformSquare(p, card);
 }
 
-// --- Rules: collisions ---
-
 function isProtected(owner, piece) {
     return piece.finished || isSafePoint(piece) || samePos(piece, board.starts[owner]);
 }
@@ -1257,7 +1671,7 @@ function evaluateMove(pIdx, pieceIdx, card) {
     return { state: finalState };
 }
 
-// --- Interaction ---
+// --- Player Interactions & Piece Selection Fix ---
 
 function getSelPiece() {
     return gameState.selByPlayer[gameState.currentPlayer];
@@ -1280,34 +1694,43 @@ function refreshPreview() {
     if (result.error) {
         setStatus(result.error, true);
     } else {
-        setStatus("Click card again or the piece to confirm", false);
+        setStatus("Click card again or preview piece to confirm", false);
         gameState.pendingMove = result.state;
     }
 }
 
 function selectCard(idx) {
     if (gameState.gameOver || gameState.picking) return;
-    
+    if (netState.setupMode === 'online' && netState.myPlayerIdx !== gameState.currentPlayer) return;
+
     if (gameState.selectedCardIdx === idx && gameState.pendingMove) {
         finishMove(gameState.pendingMove);
         return;
     }
 
-    if (gameState.swapSelected) {
-        gameState.swapSelected = false;
-    }
-
+    gameState.swapSelected = false;
     gameState.selectedCardIdx = idx;
     gameState.pendingMove = null;
+
+    if (netState.setupMode === 'online' && !netState.isHost) {
+        refreshPreview();
+        sendNetAction({ action: 'SELECT_CARD', cardIdx: idx });
+        return;
+    }
+
     updateUI();
     refreshPreview();
+    if (netState.setupMode === 'online' && netState.isHost) broadcastState();
 }
 
 function choosePiece(i) {
     const cur = gameState.currentPlayer;
+    if (netState.setupMode === 'online' && netState.myPlayerIdx !== cur) return;
+
     const arr = gameState.pieces[cur];
     let target = i;
 
+    // If clicking already-selected piece on a stack, cycle through pieces in stack
     if (i === gameState.selByPlayer[cur]) {
         const stack = [];
         arr.forEach((pc, k) => { if (!pc.finished && samePos(pc, arr[i])) stack.push(k); });
@@ -1316,22 +1739,24 @@ function choosePiece(i) {
 
     gameState.selByPlayer[cur] = target;
     gameState.swapSelected = false;
+
+    if (netState.setupMode === 'online' && !netState.isHost) {
+        updateUI();
+        refreshPreview();
+        sendNetAction({ action: 'CHOOSE_PIECE', pieceIdx: target });
+        return;
+    }
+
     updateUI();
     refreshPreview();
+    if (netState.setupMode === 'online' && netState.isHost) broadcastState();
 }
 
 function setStatus(msg, isError) {
     const el = document.getElementById('status-display');
     el.innerText = msg;
-    
-    if (!isError) {
-        el.style.backgroundColor = PLAYER_COLORS[gameState.currentPlayer];
-    } else {
-        el.style.backgroundColor = '#fa5252';
-    }
+    el.style.backgroundColor = isError ? '#fa5252' : PLAYER_COLORS[gameState.currentPlayer];
 }
-
-// --- Drawing helpers shared by both boards ---
 
 function toPixel(pt) {
     if (isHex()) return hexToPixel(pt.x, pt.y);
@@ -1342,21 +1767,20 @@ function pieceRadiusPx() {
     return isHex() ? HEX.a : SQ.T;
 }
 
+// --- Canvas Click Listener: Fixed Piece Selection ---
 canvas.addEventListener('mousedown', (e) => {
     if (!board || gameState.gameOver || gameState.picking) return;
     const cur = gameState.currentPlayer;
+
+    if (netState.setupMode === 'online' && netState.myPlayerIdx !== cur) return;
     if (isAI(cur)) return;
     
     const rect = canvas.getBoundingClientRect();
     const x = (e.clientX - rect.left) * (canvas.width / rect.width);
     const y = (e.clientY - rect.top) * (canvas.height / rect.height);
-    const hitR = pieceRadiusPx() * 0.85;
+    const hitR = pieceRadiusPx() * 0.9;
 
-    let dPending = Infinity;
-    if (gameState.pendingMove) {
-        const c = toPixel(gameState.pendingMove);
-        dPending = Math.hypot(x - c.x, y - c.y);
-    }
+    // Check if player clicked on one of their own active pieces
     let bestPiece = -1, dPiece = Infinity;
     gameState.pieces[cur].forEach((pc, i) => {
         if (pc.finished) return;
@@ -1365,18 +1789,41 @@ canvas.addEventListener('mousedown', (e) => {
         if (d < dPiece) { dPiece = d; bestPiece = i; }
     });
 
-    if (dPending <= hitR && dPending <= dPiece) {
+    // Distance to current move preview
+    let dPending = Infinity;
+    if (gameState.pendingMove) {
+        const c = toPixel(gameState.pendingMove);
+        dPending = Math.hypot(x - c.x, y - c.y);
+    }
+
+    if (dPiece <= hitR) {
+        // If clicking a different piece OR if pending move is not closer, select the piece
+        if (bestPiece !== getSelPiece() || dPiece < dPending || !gameState.pendingMove) {
+            choosePiece(bestPiece);
+            return;
+        }
+    }
+
+    if (dPending <= hitR && gameState.pendingMove) {
         finishMove(gameState.pendingMove);
-    } else if (dPiece <= hitR) {
-        choosePiece(bestPiece);
-    } else if (gameState.pendingMove || gameState.selectedCardIdx !== -1) {
+        return;
+    }
+
+    // Clicked elsewhere on board: clear selection/preview
+    if (gameState.pendingMove || gameState.selectedCardIdx !== -1) {
         gameState.pendingMove = null;
         gameState.selectedCardIdx = -1;
         updateUI();
+        if (netState.setupMode === 'online' && netState.isHost) broadcastState();
     }
 });
 
 function finishMove(newState) {
+    if (netState.setupMode === 'online' && !netState.isHost) {
+        sendNetAction({ action: 'CONFIRM_MOVE', moveState: newState });
+        return;
+    }
+
     const pIdx = gameState.currentPlayer;
     const pi = getSelPiece();
     const old = gameState.pieces[pIdx][pi];
@@ -1396,6 +1843,7 @@ function finishMove(newState) {
         gameState.gameOver = true;
         gameState.pendingMove = null;
         updateUI();
+        if (netState.setupMode === 'online' && netState.isHost) broadcastState();
         handleRoundEnd(pIdx);
         return;
     }
@@ -1406,6 +1854,7 @@ function finishMove(newState) {
     }
     
     advanceTurn();
+    if (netState.setupMode === 'online' && netState.isHost) broadcastState();
 }
 
 function advanceTurn() {
@@ -1421,13 +1870,16 @@ function advanceTurn() {
 
 function scheduleAI() {
     if (gameState.gameOver || gameState.picking || !isAI(gameState.currentPlayer)) return;
+    if (netState.setupMode === 'online' && !netState.isHost) return;
     const token = gameState.token;
     setTimeout(() => { if (token === gameState.token) aiTurn(); }, 1000);
 }
 
 function handleSwapClick() {
     if (gameState.gameOver || gameState.picking) return;
-    if (isAI(gameState.currentPlayer)) return;
+    const cur = gameState.currentPlayer;
+    if (netState.setupMode === 'online' && netState.myPlayerIdx !== cur) return;
+    if (isAI(cur)) return;
 
     if (!gameState.swapSelected) {
         gameState.swapSelected = true;
@@ -1441,14 +1893,20 @@ function handleSwapClick() {
 }
 
 function executeSwap() {
+    if (netState.setupMode === 'online' && !netState.isHost) {
+        sendNetAction({ action: 'SWAP' });
+        return;
+    }
+
     gameState.hands[gameState.currentPlayer] = [];
     for(let i=0; i<4; i++) gameState.hands[gameState.currentPlayer].push(drawCard());
     
     gameState.swapSelected = false;
     advanceTurn();
+    if (netState.setupMode === 'online' && netState.isHost) broadcastState();
 }
 
-// --- Scoring and End Game ---
+// --- End Game Scoring ---
 
 function handleRoundEnd(winnerIdx) {
     let score = 0;
@@ -1461,13 +1919,9 @@ function handleRoundEnd(winnerIdx) {
     updateScoreBoard();
     
     let isMatchOver = false;
-    
-    if (gameState.matchGoal === 'single') {
-        isMatchOver = true;
-    } else if (typeof gameState.matchGoal === 'number') {
-        if (gameState.scores[winnerIdx] >= gameState.matchGoal) {
-            isMatchOver = true;
-        }
+    if (gameState.matchGoal === 'single') isMatchOver = true;
+    else if (typeof gameState.matchGoal === 'number') {
+        if (gameState.scores[winnerIdx] >= gameState.matchGoal) isMatchOver = true;
     }
 
     setTimeout(() => showEndScreen(winnerIdx, score, isMatchOver), 500);
@@ -1497,18 +1951,15 @@ function showEndScreen(winnerIdx, roundPoints, isMatchOver) {
     
     title.style.color = winnerColor;
     
-    const winnerIsAI = gameState.isAI[winnerIdx];
-    const flavorText = winnerIsAI ? "The geometry was against you." : "The geometry was in your favour.";
-    
     if (isMatchOver) {
         title.innerText = winnerName.toUpperCase() + " WINS MATCH!";
-        msg.innerText = gameState.matchGoal === 'single' ? flavorText : `Target score reached! ${flavorText}`;
+        msg.innerText = gameState.matchGoal === 'single' ? "The geometry was in your favour." : "Target score reached!";
         nextBtn.style.display = 'none';
         newBtn.innerText = "NEW MATCH";
         newBtn.style.background = "#228be6";
     } else {
         title.innerText = winnerName.toUpperCase() + " WINS ROUND!";
-        msg.innerText = flavorText;
+        msg.innerText = "The geometry was in your favour.";
         nextBtn.style.display = 'inline-block';
         newBtn.innerText = "QUIT TO MENU";
         newBtn.style.background = "#868e96";
@@ -1582,8 +2033,6 @@ function diamondPath(cx, cy, r) {
     ctx.closePath();
 }
 
-// --- Render: hexagonal board ---
-
 function hexToPixel(q, r) {
     return {
         x: HEX.cx + HEX.a * (Math.sqrt(3) / 2) * q,
@@ -1655,21 +2104,6 @@ function drawHexBoard() {
         ctx.stroke();
     }
 }
-
-function pixelToHex(px, py) {
-    const x = (px - HEX.cx) / HEX.a;
-    const y = (py - HEX.cy) / HEX.a;
-    const qf = x / (Math.sqrt(3) / 2);
-    const rf = y - qf / 2;
-    const sf = -qf - rf;
-    let q = Math.round(qf), r = Math.round(rf), s = Math.round(sf);
-    const dq = Math.abs(q - qf), dr = Math.abs(r - rf), ds = Math.abs(s - sf);
-    if (dq > dr && dq > ds) q = -r - s;
-    else if (dr > ds) r = -q - s;
-    return { x: q, y: r };
-}
-
-// --- Render: pieces ---
 
 function shapePath(cx, cy, r) {
     if (isHex()) hexPath(cx, cy, r); else diamondPath(cx, cy, r);
@@ -1791,31 +2225,51 @@ function drawPieces() {
     }
 }
 
-// --- Helpers ---
-function updateUI() {
-    renderHand(0, 'hand-blue');
-    renderHand(1, 'hand-red');
-    if (gameState.numPlayers === 3) renderHand(2, 'hand-green');
+// --- Left Panel UI & Hand Rendering ---
 
-    for (let p = 0; p < gameState.numPlayers; p++) {
-        const arr = gameState.pieces[p] || [];
-        const home = arr.filter(x => x.finished).length;
-        document.getElementById(`p${p + 1}-progress`).innerText = `Pieces home: ${home} / ${gameState.numPieces}`;
-    }
+function updateUI() {
+    const isOnline = netState.setupMode === 'online';
+    const displayIdx = (isOnline && netState.myPlayerIdx !== null)
+        ? netState.myPlayerIdx
+        : gameState.currentPlayer;
+
+    const mainPanel = document.getElementById('main-player-panel');
+    const pColor = PLAYER_COLORS[displayIdx];
+    mainPanel.style.borderLeft = `5px solid ${pColor}`;
+
+    const nameEl = document.getElementById('main-panel-name');
+    nameEl.innerText = gameState.playerNames[displayIdx];
+    nameEl.style.color = pColor;
+
+    const arr = gameState.pieces[displayIdx] || [];
+    const home = arr.filter(x => x.finished).length;
+    document.getElementById('main-panel-progress').innerText = `Home: ${home} / ${gameState.numPieces}`;
+
+    renderMainHand(displayIdx);
     
     const statusEl = document.getElementById('status-display');
     const swapBtn = document.getElementById('swap-btn');
-    
-    const pName = gameState.playerNames[gameState.currentPlayer];
+    const cur = gameState.currentPlayer;
+    const pName = gameState.playerNames[cur];
     
     if (gameState.picking) {
         statusEl.innerText = "Choosing who goes first\u2026";
         statusEl.style.backgroundColor = '#495057';
-    } else if(!gameState.pendingMove && !gameState.swapSelected) {
-        statusEl.innerText = gameState.numPieces > 1 && !isAI(gameState.currentPlayer)
-            ? `${pName}'s Turn \u00b7 choose a piece and a card`
-            : `${pName}'s Turn`;
-        statusEl.style.backgroundColor = PLAYER_COLORS[gameState.currentPlayer];
+    } else if (!gameState.pendingMove && !gameState.swapSelected) {
+        if (isOnline) {
+            if (netState.myPlayerIdx === cur) {
+                statusEl.innerText = gameState.numPieces > 1
+                    ? `YOUR TURN \u00b7 Select piece & card`
+                    : `YOUR TURN`;
+            } else {
+                statusEl.innerText = `Waiting for ${pName}\u2026`;
+            }
+        } else {
+            statusEl.innerText = gameState.numPieces > 1 && !isAI(cur)
+                ? `${pName}'s Turn \u00b7 select piece & card`
+                : `${pName}'s Turn`;
+        }
+        statusEl.style.backgroundColor = PLAYER_COLORS[cur];
     }
 
     if (gameState.swapSelected) {
@@ -1828,15 +2282,20 @@ function updateUI() {
         swapBtn.classList.add('danger');
     }
 
-    swapBtn.disabled = isAI(gameState.currentPlayer) || gameState.picking;
+    const isMyTurn = isOnline ? (netState.myPlayerIdx === cur) : !isAI(cur);
+    swapBtn.disabled = !isMyTurn || gameState.picking;
 }
 
-function renderHand(pIdx, divId) {
-    const div = document.getElementById(divId);
+function renderMainHand(pIdx) {
+    const div = document.getElementById('main-hand-container');
     div.innerHTML = '';
-    gameState.hands[pIdx].forEach((card, idx) => {
+
+    const isOnline = netState.setupMode === 'online';
+    const isMyTurn = isOnline ? (netState.myPlayerIdx === gameState.currentPlayer) : (pIdx === gameState.currentPlayer);
+
+    (gameState.hands[pIdx] || []).forEach((card, idx) => {
         const el = document.createElement('div');
-        el.className = `card ${card.color} ${gameState.currentPlayer === pIdx && idx === gameState.selectedCardIdx ? 'selected' : ''}`;
+        el.className = `card ${card.color} ${pIdx === gameState.currentPlayer && idx === gameState.selectedCardIdx ? 'selected' : ''}`;
         
         let txt = "";
         const degrees = isHex() ? `<br><span style="font-size:0.9rem;">${card.val}&deg;</span>` : '';
@@ -1845,9 +2304,7 @@ function renderHand(pIdx, divId) {
         else if (card.type === 'turn-cw') txt = `<span style="font-size:1.8rem;">&#8635;</span>${degrees}`;
         else if (card.type === 'turn-ccw') txt = `<span style="font-size:1.8rem;">&#8634;</span>${degrees}`;
         else if (card.type === 'flip') txt = `Flip`;
-        else if (card.type === 'flipslide') {
-            txt = `Flip &<br>Slide ${card.val}`;
-        }
+        else if (card.type === 'flipslide') txt = `Flip &<br>Slide ${card.val}`;
         
         let typeLabel = "";
         if(card.type === 'slide') typeLabel = "SLIDE";
@@ -1855,13 +2312,14 @@ function renderHand(pIdx, divId) {
         else if(card.type.includes('turn')) typeLabel = "TURN";
         else if(card.type === 'flipslide') typeLabel = "FLIP & SLIDE";
 
-        el.innerHTML = `<div class="card-type">${typeLabel}</div>
-                        <div class="card-detail">${txt}</div>`;
+        el.innerHTML = `<div class="card-type">${typeLabel}</div><div class="card-detail">${txt}</div>`;
 
-        if (gameState.picking || isAI(pIdx)) el.classList.add('disabled');
-        else if (pIdx !== gameState.currentPlayer) el.classList.add('disabled');
-        else el.onclick = () => selectCard(idx);
-        
+        if (gameState.picking || isAI(pIdx) || !isMyTurn || pIdx !== gameState.currentPlayer) {
+            el.classList.add('disabled');
+        } else {
+            el.onclick = () => selectCard(idx);
+        }
+
         div.appendChild(el);
     });
 }
@@ -1870,7 +2328,8 @@ function checkWin(pIdx) {
     return gameState.pieces[pIdx].every(pc => pc.finished);
 }
 
-// --- AI ---
+// --- AI Engine ---
+
 function aiTurn() {
     const pIdx = gameState.currentPlayer;
     if (gameState.gameOver || gameState.picking || !isAI(pIdx)) return;
@@ -1930,452 +2389,94 @@ function aiTurn() {
     }
 }
 
+// --- In-Game Chat System ---
 
-// ================= ONLINE MULTIPLAYER LAYER =================
-// Host's browser runs the engine above; guests send moves, the host sends back state + each player's own hand.
-const $ = id => document.getElementById(id);
-let RC = null, room = null, online = false, isHost = false, started = false, canHost = false;
-let mySeat = -1, hostSeat = 0, seatPeer = {}, assign = {}, lobbyData = null, code = '', joinName = 'Player';
-let turnNo = 0, lastS = '', lastH = {}, lastCfg = '', lastTurn = -1, hb = null, joinT = null, unread = 0;
-const _o = {};
-['isAI','finishMove','executeSwap','renderHand','updateUI','scheduleAI','advanceTurn','initRound','pickFirstPlayer','showEndScreen','showStartScreen'].forEach(n => _o[n] = window[n]);
+let unreadCount = 0;
+let isChatOpen = false;
 
-const myPeer = () => { const p = room && room.peers().find(x => x.isMe && x.sameTab); return p ? p.peer : null; };
-const send = (t, d) => { if (room) room.emit(t, d).catch(() => {}); };
-const clean = (s, n) => String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/g, '').trim().slice(0, n);
-const myName = () => isHost ? gameState.playerNames[hostSeat] : joinName;
-
-// --- Engine wrappers ---
-window.isAI = i => online ? i !== mySeat : _o.isAI(i);   // "not controllable on this device"
-window.finishMove = function (ns) {
-    if (online && !isHost) {
-        send('act', { k: 'move', piece: getSelPiece(), card: gameState.selectedCardIdx });
-        gameState.pendingMove = null; gameState.selectedCardIdx = -1; _o.updateUI(); return;
-    }
-    return _o.finishMove(ns);
-};
-window.executeSwap = function () {
-    if (online && !isHost) { send('act', { k: 'swap' }); gameState.swapSelected = false; _o.updateUI(); return; }
-    return _o.executeSwap();
-};
-window.renderHand = function (p, id) {
-    if (!online || p === mySeat) return _o.renderHand(p, id);
-    const d = $(id); d.innerHTML = '';
-    gameState.hands[p].forEach(() => { const e = document.createElement('div'); e.className = 'card back'; d.appendChild(e); });
-};
-window.updateUI = function () {
-    _o.updateUI();
-    if (!online) return;
-    for (let p = 0; p < gameState.numPlayers; p++) {
-        const el = $(`p${p + 1}-panel-name`);
-        if (el) el.innerText = gameState.playerNames[p] + (p === mySeat ? ' (you)' : '');
-    }
-    if (isHost) setTimeout(() => pushAll(false), 0);
-};
-window.scheduleAI = function () {
-    if (online && (!isHost || !gameState.isAI[gameState.currentPlayer])) return;
-    return _o.scheduleAI();
-};
-window.advanceTurn = function () { turnNo++; return _o.advanceTurn(); };
-window.initRound = function () {
-    if (online && (!isHost || !started)) return;   // host waits in the lobby; guests follow the host
-    turnNo++; return _o.initRound();
-};
-window.pickFirstPlayer = function (done) {
-    if (!online || !isHost) return _o.pickFirstPlayer(done);
-    const n = gameState.numPlayers, w = Math.floor(Math.random() * n), r = Math.random;
-    pushAll(true); send('pick', { w });
-    Math.random = () => (w + 0.5) / n;                 // make the original animation land on w
-    try { _o.pickFirstPlayer(done); } finally { Math.random = r; }
-};
-window.showEndScreen = function (w, pts, over) {
-    _o.showEndScreen(w, pts, over);
-    if (!online) return;
-    if (isHost) {
-        send('end', { w, pts, over });
-        const nb = $('new-match-btn');
-        nb.innerText = over ? 'PLAY AGAIN (same settings)' : 'RESTART MATCH';
-        nb.style.background = '#228be6'; nb.onclick = rematch;
+function toggleChat() {
+    const win = document.getElementById('chat-window');
+    isChatOpen = !isChatOpen;
+    if (isChatOpen) {
+        win.classList.remove('hidden');
+        unreadCount = 0;
+        document.getElementById('chat-badge').style.display = 'none';
+        document.getElementById('chat-input').focus();
     } else {
-        $('next-round-btn').style.display = 'none'; $('new-match-btn').style.display = 'none';
-        $('win-message').innerText += ' Waiting for the host\u2026';
+        win.classList.add('hidden');
     }
-};
-window.showStartScreen = function () { if (online) { leaveRoom(); return; } _o.showStartScreen(); };
-function rematch() {
-    $('end-modal').style.display = 'none';
-    gameState.scores = [0, 0, 0]; updateScoreBoard(); initRound();
 }
 
-// --- Host: state out ---
-function snap() {
-    const g = gameState;
-    return { b: g.board, n: g.numPlayers, k: g.numPieces, nm: g.playerNames, ai: g.isAI, pc: g.pieces, sc: g.scores,
-             mg: g.matchGoal, cp: g.currentPlayer, go: g.gameOver, pk: g.picking, t: turnNo, hc: g.hands.map(h => h.length) };
-}
-function pushAll(force) {
-    if (!online || !isHost || !room || !started) return;
-    const j = JSON.stringify(snap());
-    if (force || j !== lastS) { lastS = j; send('state', JSON.parse(j)); }
-    gameState.hands.forEach((h, p) => {
-        const peer = seatPeer[p]; if (peer == null) return;
-        const hj = JSON.stringify(h);
-        if (force || hj !== lastH[p]) { lastH[p] = hj; send('hand', { to: peer, seat: p, hand: h }); }
-    });
-}
-function pushLobby() {
-    if (!isHost || !room) return;
-    const g = gameState, pr = room.peers().map(p => p.peer), seats = [], a = {};
-    for (let i = 0; i < g.numPlayers; i++)
-        seats.push({ h: !g.isAI[i], nm: g.playerNames[i], t: i === hostSeat || (seatPeer[i] != null && pr.includes(seatPeer[i])) });
-    const mp = myPeer(); if (mp) a[mp] = hostSeat;
-    for (const s in seatPeer) if (pr.includes(seatPeer[s])) a[seatPeer[s]] = +s;
-    const l = { seats, a, st: started, code };
-    assign = a; lobbyData = l; renderLobby(l); send('lobby', l);
-}
-function renderLobby(l) {
-    $('lobby-code').innerText = l.code || code;
-    const box = $('lobby-seats'); box.innerHTML = '';
-    l.seats.forEach((s, i) => {
-        const r = document.createElement('div'); r.className = 'seat-row';
-        const dot = document.createElement('span'); dot.className = 'dot'; dot.style.background = PLAYER_COLORS[i];
-        const t = document.createElement('span');
-        t.textContent = !s.h ? `${s.nm} (computer)` : s.t ? `${s.nm}${i === mySeat ? ' (you)' : ''}` : 'Waiting for player\u2026';
-        r.appendChild(dot); r.appendChild(t); box.appendChild(r);
-    });
-    const full = l.seats.every(s => !s.h || s.t);
-    $('lobby-start').style.display = isHost ? '' : 'none';
-    $('lobby-start').disabled = !full;
-    $('lobby-msg').innerText = isHost ? (full ? 'Everyone is here \u2013 start when ready.' : 'Waiting for players to join\u2026') : 'Waiting for the host to start\u2026';
+function addChatMessage(sender, color, text) {
+    const container = document.getElementById('chat-messages');
+    if (!container) return;
+
+    const div = document.createElement('div');
+    if (sender === 'System') {
+        div.className = 'chat-msg system';
+        div.innerText = text;
+    } else {
+        div.className = 'chat-msg';
+        div.innerHTML = `<span class="sender" style="color:${color}">${escapeHtml(sender)}:</span><span>${escapeHtml(text)}</span>`;
+    }
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+
+    if (!isChatOpen) {
+        unreadCount++;
+        const badge = document.getElementById('chat-badge');
+        badge.innerText = unreadCount;
+        badge.style.display = 'inline-block';
+    }
 }
 
-// --- Guest: state in ---
-function applySnap(s) {
-    const g = gameState;
-    Object.assign(g, { board: s.b, numPlayers: s.n, numPieces: s.k, playerNames: s.nm, isAI: s.ai, pieces: s.pc, scores: s.sc,
-                       matchGoal: s.mg, currentPlayer: s.cp, gameOver: s.go, picking: s.pk });
-    if (s.b + s.n !== lastCfg) {
-        lastCfg = s.b + s.n; setupBoard(s.b, s.n);
-        $('panel-green').style.display = s.n === 3 ? 'flex' : 'none';
-        document.body.classList.toggle('three-players', s.n === 3);
-        document.body.classList.toggle('hex-board', s.b === 'hex');
-    }
-    for (let p = 0; p < 3; p++) if (p !== mySeat) g.hands[p] = Array.from({ length: s.hc[p] || 0 }, () => ({ type: 'x', color: 'neutral' }));
-    if (s.t !== lastTurn) {
-        lastTurn = s.t; g.selectedCardIdx = -1; g.pendingMove = null; g.swapSelected = false;
-        if (!s.pk && g.pieces[s.cp]) ensureSelectedPiece(s.cp);
-    }
-    updateScoreBoard();
-    if (!s.go) $('end-modal').style.display = 'none';
-    $('lobby-modal').style.display = 'none'; $('start-modal').style.display = 'none';
-    updateUI();
-}
+function sendChatMessage() {
+    const input = document.getElementById('chat-input');
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = '';
 
-// --- Room wiring ---
-function wireRoom() {
-    room.on('join', m => {
-        if (!isHost) return;
-        const g = gameState, nm = clean(m.data && m.data.name, 20) || 'Player', pr = room.peers().map(p => p.peer);
-        let s = Object.keys(seatPeer).find(k => seatPeer[k] === m.peer);
-        if (s == null) {
-            const free = [];
-            for (let i = 0; i < g.numPlayers; i++)
-                if (i !== hostSeat && !g.isAI[i] && (seatPeer[i] == null || !pr.includes(seatPeer[i]))) free.push(i);
-            if (free.length) { const byName = free.find(i => g.playerNames[i] === nm); s = byName != null ? byName : free[0]; }
+    let sender = "Player";
+    let color = "#333";
+
+    if (netState.setupMode === 'online' && netState.myPlayerIdx !== null) {
+        sender = gameState.playerNames[netState.myPlayerIdx] || `Player ${netState.myPlayerIdx + 1}`;
+        color = PLAYER_COLORS[netState.myPlayerIdx] || "#333";
+    } else {
+        sender = gameState.playerNames[gameState.currentPlayer] || `Player ${gameState.currentPlayer + 1}`;
+        color = PLAYER_COLORS[gameState.currentPlayer] || "#333";
+    }
+
+    addChatMessage(sender, color, text);
+
+    if (netState.setupMode === 'online') {
+        const msgObj = { type: 'CHAT', sender: sender, color: color, text: text };
+        if (netState.isHost) {
+            netState.conns.forEach(c => { if (c.conn && c.conn.open) c.conn.send(msgObj); });
+        } else if (netState.hostConn) {
+            netState.hostConn.send(msgObj);
         }
-        if (s != null) { s = +s; seatPeer[s] = m.peer; g.playerNames[s] = nm; lastH[s] = null; updateScoreBoard(); updateUI(); }
-        pushLobby(); if (started) pushAll(true);
-    });
-    room.on('act', m => {
-        if (!isHost || !started) return;
-        const d = m.data || {}, g = gameState, s = +Object.keys(seatPeer).find(k => seatPeer[k] === m.peer);
-        if (isNaN(s) || s !== g.currentPlayer || g.gameOver || g.picking || g.isAI[s]) return;
-        if (d.k === 'swap') { executeSwap(); return; }
-        if (!Number.isInteger(d.piece) || !Number.isInteger(d.card)) return;
-        const pc = g.pieces[s][d.piece], card = g.hands[s][d.card];
-        const r = pc && card && !pc.finished ? evaluateMove(s, d.piece, card) : { error: 1 };
-        if (r.error) { pushAll(true); return; }
-        g.selByPlayer[s] = d.piece; g.selectedCardIdx = d.card; finishMove(r.state);
-    });
-    room.on('lobby', m => {
-        const l = m.data; if (isHost || !l || !l.seats) return;
-        lobbyData = l; assign = l.a || {}; code = l.code || code;
-        const me = assign[myPeer()]; mySeat = me == null ? -1 : me;
-        clearTimeout(joinT); renderLobby(l);
-        if (!l.st) { $('lobby-modal').style.display = 'flex'; $('start-modal').style.display = 'none'; }
-    });
-    room.on('state', m => { if (!isHost && m.data && m.data.pc) applySnap(m.data); });
-    room.on('hand', m => {
-        const d = m.data; if (isHost || !d || d.to !== myPeer() || !Array.isArray(d.hand)) return;
-        mySeat = d.seat; gameState.hands[d.seat] = d.hand; updateUI();
-    });
-    room.on('pick', m => {
-        if (isHost || !m.data) return;
-        const w = +m.data.w, n = gameState.numPlayers, r = Math.random;
-        $('end-modal').style.display = 'none';
-        Math.random = () => (w + 0.5) / n;
-        try { _o.pickFirstPlayer(() => {}); } finally { Math.random = r; }
-    });
-    room.on('end', m => { if (!isHost && m.data) setTimeout(() => showEndScreen(m.data.w, m.data.pts, m.data.over), 0); });
-    room.on('chat', m => {
-        const d = m.data || {}, s = assign[m.peer];
-        const nm = s != null && gameState.playerNames[s] ? gameState.playerNames[s] : (clean(d.nm, 20) || 'Spectator');
-        addChat(nm, clean(d.t, 300), m.isMe, s);
-    });
-    room.on('sig', m => { const p = (sigQ[m.peer] || Promise.resolve()).then(() => onSig(m)).catch(() => {}); sigQ[m.peer] = p; });
-    room.onPeers(c => { c.left.forEach(p => closePc(p.peer)); if (isHost) pushLobby(); });
-    room.onClose = () => { if (online) { leaveRoom(); $('online-msg').innerText = 'Connection to the host was lost.'; } };
-}
-
-async function createRoom() {
-    const msg = $('online-msg'); msg.innerText = '';
-    const n = selectedPlayerCount(), humans = [];
-    for (let i = 0; i < n; i++) if ($(`p${i + 1}-type`).value === 'human') humans.push(i);
-    if (humans.length < 2) { msg.innerText = 'Set at least two players to Human so a friend can take a seat.'; return; }
-    code = Array.from({ length: 5 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 32)]).join('');
-    try { room = await RC.host(code); } catch (e) { msg.innerText = 'Could not open a room, please try again (' + (e && e.code || 'error') + ').'; return; }
-    online = true; isHost = true; started = false; seatPeer = {}; hostSeat = humans[0]; mySeat = hostSeat;
-    startGame();                                       // configures board/panels; initRound is held until Start
-    wireRoom(); openChat(true); $('lobby-modal').style.display = 'flex';
-    $('lobby-start').onclick = () => { started = true; $('lobby-modal').style.display = 'none'; pushLobby(); initRound(); };
-    pushLobby(); hb = setInterval(() => { pushLobby(); if (started) pushAll(true); }, 4000);
-}
-
-async function joinRoom() {
-    const msg = $('online-msg'); msg.innerText = '';
-    const c = clean($('join-code').value, 5).toUpperCase();
-    if (c.length < 5) { msg.innerText = 'Enter the 5-character room code.'; return; }
-    joinName = clean($('join-name').value, 20) || 'Player';
-    try { room = await RC.join(c); } catch (e) { msg.innerText = e && e.code === 'peer-unavailable' ? 'No game found with that code.' : 'Could not join (' + (e && e.code || 'error') + ').'; return; }
-    online = true; isHost = false; code = c; mySeat = -1; lobbyData = null;
-    wireRoom(); openChat(true);
-    $('start-modal').style.display = 'none'; $('lobby-modal').style.display = 'flex';
-    $('lobby-code').innerText = c; $('lobby-seats').innerHTML = ''; $('lobby-start').style.display = 'none'; $('lobby-msg').innerText = 'Connecting\u2026';
-    send('join', { name: joinName });
-    joinT = setTimeout(() => { if (!lobbyData) { leaveRoom(); $('online-msg').innerText = 'No game found with that code.'; } }, 9000);
-    hb = setInterval(() => { if (assign[myPeer()] === undefined) send('join', { name: joinName }); }, 4000);
-}
-
-function leaveRoom() {
-    clearInterval(hb); clearTimeout(joinT); stopVoice();
-    if (room) { room.leave().catch(() => {}); }
-    room = null; online = false; isHost = false; started = false; mySeat = -1; seatPeer = {}; assign = {}; lobbyData = null;
-    lastS = ''; lastH = {}; lastCfg = ''; lastTurn = -1; gameState.token++;
-    $('lobby-modal').style.display = 'none'; $('chat').style.display = 'none'; $('chat-log').innerHTML = '';
-    $('new-match-btn').onclick = null;
-    $('new-match-btn').style.display = ''; $('next-round-btn').style.display = '';
-    _o.showStartScreen(); updateScoreBoard();
-}
-
-// --- Chat ---
-function openChat(show) { $('chat').style.display = show ? 'flex' : 'none'; }
-function addChat(nm, t, me, seat) {
-    const l = $('chat-log'), d = document.createElement('div'), b = document.createElement('b');
-    b.textContent = nm + ': '; b.style.color = (seat != null && seat >= 0) ? PLAYER_COLORS[seat] : '#555';
-    d.appendChild(b); d.appendChild(document.createTextNode(t)); l.appendChild(d); l.scrollTop = l.scrollHeight;
-    if ($('chat-box').style.display !== 'flex' && !me) { unread++; $('chat-badge').textContent = ' (' + unread + ')'; }
-}
-function sendChat() {
-    const t = clean($('chat-text').value, 300); if (!t) return;
-    $('chat-text').value = ''; send('chat', { nm: myName(), t });
-}
-$('chat-tog').onclick = () => {
-    const b = $('chat-box'), open = b.style.display !== 'flex';
-    b.style.display = open ? 'flex' : 'none'; if (open) { unread = 0; $('chat-badge').textContent = ''; $('chat-text').focus(); }
-};
-$('chat-send').onclick = sendChat;
-$('chat-text').addEventListener('keydown', e => { if (e.key === 'Enter') sendChat(); });
-$('copy-invite').onclick = () => {
-    const url = location.href.split('#')[0] + '#room=' + code;
-    const fail = () => { $('lobby-msg').innerText = 'Share this link or the code ' + code + ': ' + url; };
-    try { navigator.clipboard.writeText(url).then(() => { $('lobby-msg').innerText = 'Link copied!'; }, fail); } catch (e) { fail(); }
-};
-
-// --- Voice (peer-to-peer WebRTC audio, signalling over the room) ---
-let vStream = null, vOn = false, pcs = {}, sigQ = {};
-const iceCfg = () => ({ iceServers: ICE_LIST || [{ urls: 'stun:stun.l.google.com:19302' }] });
-function closePc(peer) {
-    if (pcs[peer]) { try { pcs[peer].close(); } catch (e) {} delete pcs[peer]; }
-    const a = document.getElementById('au-' + peer); if (a) a.remove();
-}
-function mkPc(peer) {
-    if (pcs[peer]) return pcs[peer];
-    const pc = new RTCPeerConnection(iceCfg()); pcs[peer] = pc;
-    vStream.getTracks().forEach(t => pc.addTrack(t, vStream));
-    pc.onicecandidate = e => { if (e.candidate) send('sig', { to: peer, k: 'ice', c: e.candidate.toJSON() }); };
-    pc.ontrack = e => {
-        let a = document.getElementById('au-' + peer);
-        if (!a) { a = document.createElement('audio'); a.id = 'au-' + peer; a.autoplay = true; document.body.appendChild(a); }
-        a.srcObject = e.streams[0];
-    };
-    return pc;
-}
-async function onSig(m) {
-    const d = m.data; if (!vOn || !d || d.to !== myPeer()) return;
-    if (d.k === 'offer') {
-        closePc(m.peer); const pc = mkPc(m.peer);
-        await pc.setRemoteDescription({ type: 'offer', sdp: String(d.s) });
-        const a = await pc.createAnswer(); await pc.setLocalDescription(a);
-        send('sig', { to: m.peer, k: 'answer', s: pc.localDescription.sdp });
-    } else if (d.k === 'answer' && pcs[m.peer]) await pcs[m.peer].setRemoteDescription({ type: 'answer', sdp: String(d.s) });
-    else if (d.k === 'ice' && pcs[m.peer] && pcs[m.peer].remoteDescription) await pcs[m.peer].addIceCandidate(d.c);
-}
-async function toggleVoice() {
-    const msg = $('voice-msg'); msg.innerText = '';
-    if (vOn) { stopVoice(); return; }
-    try { vStream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
-    catch (e) { msg.innerText = 'Microphone not available here.'; return; }
-    vOn = true; $('voice-btn').innerHTML = '&#127908; Leave voice'; $('voice-btn').style.background = '#fa5252'; $('mute-btn').style.display = '';
-    room.presence({ voice: true }).catch(() => {});
-    for (const p of room.peers()) {
-        if (p.isMe || !p.presence.voice) continue;
-        try { const pc = mkPc(p.peer); const o = await pc.createOffer(); await pc.setLocalDescription(o); send('sig', { to: p.peer, k: 'offer', s: pc.localDescription.sdp }); } catch (e) {}
     }
 }
-function stopVoice() {
-    vOn = false; Object.keys(pcs).forEach(closePc);
-    if (vStream) { vStream.getTracks().forEach(t => t.stop()); vStream = null; }
-    if (room) room.presence({ voice: null }).catch(() => {});
-    $('voice-btn').innerHTML = '&#127908; Join voice'; $('voice-btn').style.background = '#2f9e44';
-    $('mute-btn').style.display = 'none'; $('mute-btn').innerText = 'Mute';
-}
-$('voice-btn').onclick = toggleVoice;
-$('mute-btn').onclick = () => {
-    if (!vStream) return; const t = vStream.getAudioTracks()[0]; t.enabled = !t.enabled;
-    $('mute-btn').innerText = t.enabled ? 'Mute' : 'Unmute';
-};
 
-// ================= NETWORK SETTINGS (edit this block) =================
-// TURN relay servers make the game work on school/corporate networks that block direct connections.
-// Option A (easiest): free Metered.ca account -> fill in your app domain + API key below.
-// Option B: any TURN service (Cloudflare, Twilio, your own coturn) -> add entries to iceServers, e.g.
-//   { urls: ['turn:turn.example.org:3478?transport=udp', 'turns:turn.example.org:443?transport=tcp'], username: '...', credential: '...' }
-// Option C: your own PeerJS signalling server -> peerServer: { host: 'my-peer.example.org', port: 443, path: '/', secure: true }
-const NET_CONFIG = {
-    meteredDomain: '',      // e.g. 'myschool.metered.live'
-    meteredApiKey: '',      // e.g. 'abc123...'
-    iceServers: [
-        { urls: 'stun:stun.relay.metered.ca:80' },
-        { urls: 'turn:global.relay.metered.ca:80', username: 'f0e6434408cc0b855ef1a27f', credential: 'TwQjxqq6IJNrMrq8' },
-        { urls: 'turn:global.relay.metered.ca:80?transport=tcp', username: 'f0e6434408cc0b855ef1a27f', credential: 'TwQjxqq6IJNrMrq8' },
-        { urls: 'turn:global.relay.metered.ca:443', username: 'f0e6434408cc0b855ef1a27f', credential: 'TwQjxqq6IJNrMrq8' },
-        { urls: 'turns:global.relay.metered.ca:443?transport=tcp', username: 'f0e6434408cc0b855ef1a27f', credential: 'TwQjxqq6IJNrMrq8' }
-    ],
-    peerServer: null
-};
-let ICE_LIST = null;
-async function loadIce() {
-    if (ICE_LIST) return ICE_LIST;
-    let l = [{ urls: 'stun:stun.l.google.com:19302' }].concat(NET_CONFIG.iceServers || []);
-    let relay = (NET_CONFIG.iceServers || []).length > 0;
-    if (NET_CONFIG.meteredDomain && NET_CONFIG.meteredApiKey) {
-        try {
-            const r = await fetch(`https://${NET_CONFIG.meteredDomain}/api/v1/turn/credentials?apiKey=${encodeURIComponent(NET_CONFIG.meteredApiKey)}`);
-            const j = await r.json();
-            if (Array.isArray(j) && j.length) { l = l.concat(j); relay = true; }
-        } catch (e) { console.warn('FlipSlide: could not load TURN credentials', e); }
+function escapeHtml(str) {
+    return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+// Auto-detect invite link with ?room=CODE
+window.addEventListener('load', () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomParam = urlParams.get('room');
+    if (roomParam) {
+        openJoinModal();
+        document.getElementById('join-code-input').value = roomParam.toUpperCase();
+        document.getElementById('join-status-text').innerText = "Direct link detected! Click Join Room to start.";
     }
-    if (!relay) console.warn('FlipSlide: no TURN relay configured - online play may fail on restrictive networks.');
-    return (ICE_LIST = l);
-}
-const peerOpts = () => loadIce().then(l => Object.assign({ config: { iceServers: l } }, NET_CONFIG.peerServer || {}));
+});
 
-// --- Networking: PeerJS star topology (host = hub). Replaces the claude.ai room capability. ---
-function mkRoom(isH, peerObj, hostConn, id) {
-    const ls = {}, pl = [], conns = {}, my = isH ? 'host' : id;
-    let mePr = {}, roster = [{ peer: my, presence: {} }], prev = [], closed = false;
-    const msg = (t, d, from) => ({ topic: t, data: d, peer: from, by: null, isMe: from === my, sameTab: from === my, kind: 'viewer', guest: false });
-    const disp = (t, d, from) => (ls[t] || []).slice().forEach(f => { try { f(msg(t, d, from)); } catch (e) {} });
-    const snapPeers = () => {
-        const l = isH ? [{ peer: 'host', presence: mePr }].concat(Object.keys(conns).map(k => ({ peer: k, presence: conns[k].pr }))) : roster;
-        return l.map(p => ({ peer: p.peer, isMe: p.peer === my, sameTab: p.peer === my, kind: 'viewer', guest: false, by: null, presence: p.presence || {}, updatedAt: 0 }));
-    };
-    const fire = () => {
-        const cur = snapPeers(), ids = new Set(cur.map(p => p.peer)), old = new Set(prev.map(p => p.peer));
-        const ch = { peers: cur, joined: cur.filter(p => !old.has(p.peer)), left: prev.filter(p => !ids.has(p.peer)), updated: [] };
-        prev = cur; pl.slice().forEach(f => f(ch));
-    };
-    const bcastRoster = () => {
-        const l = snapPeers().map(p => ({ peer: p.peer, presence: p.presence }));
-        Object.values(conns).forEach(x => x.c.send({ c: 'peers', l })); fire();
-    };
-    const api = {
-        onClose: null,
-        on(t, f) { (ls[t] = ls[t] || []).push(f); return () => { ls[t] = (ls[t] || []).filter(x => x !== f); }; },
-        emit(t, d) {
-            if (isH) {
-                if (d && typeof d === 'object' && d.to && (t === 'hand' || t === 'sig')) { if (conns[d.to]) conns[d.to].c.send({ t, d, from: 'host' }); }  // private: only the addressee
-                else { Object.values(conns).forEach(x => x.c.send({ t, d, from: 'host' })); disp(t, d, 'host'); }
-            } else hostConn.send({ t, d });
-            return Promise.resolve();
-        },
-        peers: snapPeers,
-        onPeers(f) { pl.push(f); return () => {}; },
-        presence(p) {
-            if (isH) { mePr = Object.assign({}, mePr, p); for (const k in p) if (p[k] === null) delete mePr[k]; bcastRoster(); }
-            else hostConn.send({ c: 'pres', p });
-            return Promise.resolve();
-        },
-        leave() { closed = true; try { peerObj.destroy(); } catch (e) {} return Promise.resolve(); }
-    };
-    if (isH) {
-        peerObj.on('connection', c => {
-            c.on('open', () => { conns[c.peer] = { c, pr: {} }; bcastRoster(); });
-            c.on('data', m => {
-                const x = conns[c.peer]; if (!x || !m || typeof m !== 'object') return;
-                if (m.c === 'pres') { if (m.p && typeof m.p === 'object') { x.pr = m.p.voice ? { voice: true } : {}; bcastRoster(); } return; }
-                const t = m.t, d = m.d;
-                if (t === 'join' || t === 'act') disp(t, d, c.peer);                          // guests may only send these...
-                else if (t === 'chat') { Object.values(conns).forEach(y => y.c.send({ t, d, from: c.peer })); disp(t, d, c.peer); }
-                else if (t === 'sig' && d && typeof d.to === 'string') {                       // ...plus chat and addressed voice signalling
-                    if (d.to === 'host') disp(t, d, c.peer); else if (conns[d.to]) conns[d.to].c.send({ t, d, from: c.peer });
-                }
-            });
-            c.on('close', () => { delete conns[c.peer]; bcastRoster(); });
-            c.on('error', () => {});
-        });
-    } else {
-        hostConn.on('data', m => {
-            if (!m) return;
-            if (m.c === 'peers' && Array.isArray(m.l)) { roster = m.l; fire(); return; }
-            if (typeof m.t === 'string') disp(m.t, m.d, m.from);
-        });
-        hostConn.on('close', () => { if (!closed && api.onClose) api.onClose(); });
-    }
-    return api;
-}
-const rcHost = code => peerOpts().then(o => new Promise((res, rej) => {
-    const p = new Peer('flipslide-' + code.toLowerCase(), o); let done = false;
-    const t = setTimeout(() => { if (!done) { done = true; try { p.destroy(); } catch (e) {} rej({ code: 'timeout' }); } }, 10000);
-    p.on('open', () => { done = true; clearTimeout(t); res(mkRoom(true, p)); });
-    p.on('error', e => { if (!done) { done = true; clearTimeout(t); rej({ code: e.type }); } });
-}));
-const rcJoin = code => peerOpts().then(o => new Promise((res, rej) => {
-    const p = new Peer(undefined, o); let done = false;
-    const fail = e => { if (!done) { done = true; clearTimeout(t); try { p.destroy(); } catch (x) {} rej({ code: e && e.type || 'error' }); } };
-    const t = setTimeout(() => fail({ type: 'timeout' }), 25000);
-    p.on('error', fail);
-    p.on('open', id => {
-        const c = p.connect('flipslide-' + code.toLowerCase(), { reliable: true });
-        c.on('open', () => { if (!done) { done = true; clearTimeout(t); res(mkRoom(false, p, c, id)); } });
-        c.on('error', fail);
-    });
-}));
-
-// --- Start-up: light up online play only if PeerJS loaded ---
-(function () {
-    if (typeof Peer === 'undefined') return;
-    RC = { host: rcHost, join: rcJoin };
-    $('online-box').style.display = 'flex';
-    const m = /room=([A-Za-z0-9]{5})/.exec(location.hash + location.search);
-    if (m) { $('join-code').value = m[1].toUpperCase(); $('join-name').focus(); }
-})();
-
-
-// Initial setup on load
-onBoardChange();
-onGoalTypeChange();
+// Initial Setup
 requestAnimationFrame(animLoop);
+
 </script>
 </body>
 </html>
